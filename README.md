@@ -18,7 +18,7 @@ Kubecost finds over-requested containers. This package turns each recommendation
   - Apply re-checks for drift and spec changes.
   - Approvals expire.
   - One-shot actions are cleaned up.
-- **Python standard library only.** CI runs on Linux and macOS with Python 3.9 and 3.12.
+- **Python standard library only.** CI runs on Linux and macOS with Python 3.11 and 3.13.
 
 Verified end to end against Kubecost **3.3.1**: an API-created action resized a Deployment from 500m/512Mi to 10m/20Mi with status `success`. See [docs/kubecost-api-notes.md](docs/kubecost-api-notes.md).
 
@@ -154,7 +154,7 @@ tests/                        unit + end-to-end tests against in-process Kubecos
 ```bash
 python3 -m unittest discover -s tests -v     # no network, no dependencies
 ```
-CI runs the tests on Ubuntu and macOS (Python 3.9 and 3.12). It also smoke-tests `action.yml` itself against the mock Kubecost: plan → approve → apply → watch.
+CI runs the tests on Ubuntu and macOS (Python 3.11 and 3.13). It also smoke-tests `action.yml` itself against the mock Kubecost: plan → approve → apply → watch.
 
 ## Limits and caveats
 - **Timing:** Kubecost runs new actions on its own schedule. In the lab it took about 70 minutes from apply to resize. `watch` runs every 15 minutes.
