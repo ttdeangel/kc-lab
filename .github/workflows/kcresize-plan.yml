@@ -23,6 +23,7 @@ concurrency:
 
 jobs:
   plan:
+    if: vars.KUBECOST_URL != ''          # skip until the repo is connected to a Kubecost (lab/setup.sh github)
     runs-on: ${{ fromJSON(vars.KCRESIZE_RUNS_ON || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v4

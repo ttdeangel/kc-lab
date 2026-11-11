@@ -28,11 +28,12 @@ concurrency:
 jobs:
   action:
     if: >-
+      vars.KUBECOST_URL != '' && (
       (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'kcresize') &&
         (startsWith(github.event.comment.body, '/apply') || startsWith(github.event.comment.body, '/decline'))) ||
       (github.event_name == 'repository_dispatch' &&
         contains(fromJSON('["apply","decline"]'), github.event.client_payload.event)) ||
-      github.event_name == 'workflow_dispatch'
+      github.event_name == 'workflow_dispatch')
     runs-on: ${{ fromJSON(vars.KCRESIZE_RUNS_ON || '"ubuntu-latest"') }}
     environment: kubecost-actioning
     steps:
