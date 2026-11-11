@@ -1,0 +1,24 @@
+# Slack app for interactive buttons (owner Approve / Disapprove + reason, actioning Apply / Decline).
+# api.slack.com/apps -> Create New App -> From a manifest -> paste, replace the URL.
+# Then: Install to workspace, create two Incoming Webhooks (owner channel, actioning channel) and set
+#   KCRESIZE_SLACK_OWNER_WEBHOOK / KCRESIZE_SLACK_ACTION_WEBHOOK (repo secrets),
+#   SLACK_SIGNING_SECRET (gateway secret, from Basic Information),
+#   repo variable KCRESIZE_INTERACTIVE=1.
+# Without the app, plain incoming webhooks still work: cards get a "Review and decide" link to the issue.
+display_information:
+  name: Kubecost Resize Approvals
+  description: Approve or disapprove Kubecost right-sizing proposals
+features:
+  bot_user:
+    display_name: kcresize
+    always_online: false
+oauth_config:
+  scopes:
+    bot:
+      - incoming-webhook
+settings:
+  interactivity:
+    is_enabled: true
+    request_url: https://kcresize-gateway.example.com/slack/interactions
+  org_deploy_enabled: false
+  socket_mode_enabled: false

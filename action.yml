@@ -1,0 +1,106 @@
+name: Kubecost Resize Approvals
+description: >-
+  Approval-gated container request right-sizing for any Kubecost 3.x deployment. Plans from Kubecost
+  recommendations and Allocation costs, asks workload owners to approve or disapprove (GitHub issues,
+  email, Slack, Teams, webhook), and applies approved changes through Kubecost Actions.
+author: kcresize
+branding:
+  icon: trending-down
+  color: green
+
+inputs:
+  command:
+    description: "doctor | plan | event | approve | disapprove | apply | decline | watch | status"
+    required: true
+  args:
+    description: "Extra CLI arguments, e.g. 'tbm-payments/fraud-scorer --reason \"ok\"'"
+    required: false
+    default: ""
+  kubecost-url:
+    description: "Kubecost base URL reachable from the runner (e.g. http://kubecost-frontend.kubecost:9090)"
+    required: true
+  cluster-id:
+    description: "Kubecost cluster id to plan for (global.clusterId)"
+    required: true
+  config:
+    description: "Path to kcresize.json (owners, actioning team, scope, channels, guardrails)"
+    required: false
+    default: ".github/kcresize.json"
+  role:
+    description: "For command=event: 'owner' handles /approve /disapprove, 'actioning' handles /apply /decline"
+    required: false
+    default: ""
+  state:
+    description: "github (issues) or file"
+    required: false
+    default: "github"
+  read-only:
+    description: "true = GET requests only; nothing is written to Kubecost, issues or channels"
+    required: false
+    default: "false"
+  github-token:
+    description: "Token for issues (default GITHUB_TOKEN). Use a token with read:org for @org/team owner entries."
+    required: false
+    default: ${{ github.token }}
+  fail-on-denied:
+    description: "Fail the step when a request is denied (wrong person, wrong state, missing reason)"
+    required: false
+    default: "false"
+  setup-python:
+    description: "Install Python 3.12 with actions/setup-python (set false on runners that already have python3)"
+    required: false
+    default: "true"
+
+outputs:
+  result:
+    description: "ok | denied"
+    value: ${{ steps.run.outputs.result }}
+  status:
+    description: "Proposal status after the command"
+    value: ${{ steps.run.outputs.status }}
+  plan:
+    description: "Plan id (command=plan)"
+    value: ${{ steps.run.outputs.plan }}
+  proposals:
+    description: "Number of new proposals filed (command=plan)"
+    value: ${{ steps.run.outputs.proposals }}
+  savings:
+    description: "Estimated monthly savings of the plan (command=plan)"
+    value: ${{ steps.run.outputs.savings }}
+  action-id:
+    description: "Kubecost action id (command=apply)"
+    value: ${{ steps.run.outputs.action_id }}
+
+runs:
+  using: composite
+  steps:
+    - if: inputs.setup-python == 'true'
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - id: run
+      shell: bash
+      env:
+        PYTHONPATH: ${{ github.action_path }}
+        KCRESIZE_CONFIG: ${{ inputs.config }}
+        KUBECOST_URL: ${{ inputs.kubecost-url }}
+        KUBECOST_CLUSTER: ${{ inputs.cluster-id }}
+        KCRESIZE_STATE: ${{ inputs.state }}
+        KCRESIZE_READ_ONLY: ${{ inputs.read-only }}
+        KCRESIZE_ROLE: ${{ inputs.role }}
+        KCRESIZE_GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_COMMAND: ${{ inputs.command }}
+        INPUT_ARGS: ${{ inputs.args }}
+        FAIL_ON_DENIED: ${{ inputs.fail-on-denied }}
+      run: |
+        set -euo pipefail
+        PY="$(command -v python3 || command -v python)"
+        rc=0
+        "$PY" -m kcresize || rc=$?          # reads INPUT_COMMAND / INPUT_ARGS (portable to macOS bash 3.2)
+        if [ "$rc" -eq 3 ]; then
+          echo "::notice::kcresize: request denied (see message above)"
+          [ "$FAIL_ON_DENIED" = "true" ] && exit 3
+          exit 0
+        fi
+        exit "$rc"

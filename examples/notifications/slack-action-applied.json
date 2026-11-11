@@ -1,0 +1,12 @@
+{
+  "text": "[Kubecost] tbm-payments/fraud-scorer: Resized by Kubecost",
+  "blocks": [
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*tbm-payments/fraud-scorer: Resized by Kubecost*\napp 400m/512Mi -> 10m/20Mi\n  app: 400m/512Mi -> 10m/20Mi\nhttps://github.com/acme/platform-finops/issues/4"
+      }
+    }
+  ]
+}

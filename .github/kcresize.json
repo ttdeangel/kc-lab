@@ -1,0 +1,23 @@
+{
+  "_comment": "Regenerate with ./lab/setup.sh config (reads lab/lab.env). Cluster id and URL come from repo variables KUBECOST_CLUSTER / KUBECOST_URL. Secrets go in repository secrets, never here.",
+  "kubecost": {
+    "window": "48h",
+    "allocationWindow": "7d"
+  },
+  "scope": {
+    "namespaces": [],
+    "namespaceLabel": "kcresize.io/approval=required",
+    "exclude": ["kube-system", "kube-public", "kube-node-lease", "kubecost", "local-path-storage", "objectstore"]
+  },
+  "owners": {
+    "tbm-payments": {"github": ["YOUR_GITHUB_USER"], "email": ["YOUR_EMAIL"]},
+    "shop-prod":    {"github": ["YOUR_GITHUB_USER"], "email": ["YOUR_EMAIL"]},
+    "shop-dev":     {"github": ["YOUR_GITHUB_USER"], "email": ["YOUR_EMAIL"]}
+  },
+  "actioning": {"github": ["YOUR_GITHUB_USER"], "email": ["YOUR_EMAIL"]},
+  "notify": {
+    "owner": ["email"],
+    "actioning": ["email"]
+  },
+  "state": "github"
+}

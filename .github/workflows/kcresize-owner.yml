@@ -1,0 +1,61 @@
+# Owner decisions: approve or disapprove (reason required). Nothing else.
+#   - issue comment   /approve [--force] <note>   |   /disapprove <reason>
+#   - Slack / Teams   buttons via gateway -> repository_dispatch (event_type: kcresize)
+#   - manual form     workflow_dispatch
+# Who may decide is checked against owners.<namespace> in .github/kcresize.json.
+# On approval the actioning team gets the work order; the owner gets only an acknowledgement.
+name: kcresize - owner decision
+
+on:
+  issue_comment:
+    types: [created]
+  repository_dispatch:
+    types: [kcresize]
+  workflow_dispatch:
+    inputs:
+      workload: {description: "namespace/deployment", required: true}
+      decision: {description: "approve or disapprove", required: true, type: choice, options: [approve, disapprove]}
+      reason: {description: "Note (required to disapprove)", required: false}
+      force: {description: "Approve a large production cut", type: boolean, default: false}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: kcresize-state
+  cancel-in-progress: false
+
+jobs:
+  decide:
+    if: >-
+      (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'kcresize') &&
+        (startsWith(github.event.comment.body, '/approve') || startsWith(github.event.comment.body, '/disapprove'))) ||
+      (github.event_name == 'repository_dispatch' &&
+        contains(fromJSON('["approve","approve_force","disapprove"]'), github.event.client_payload.event)) ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ${{ fromJSON(vars.KCRESIZE_RUNS_ON || '"ubuntu-latest"') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          command: event
+          role: owner
+          kubecost-url: ${{ vars.KUBECOST_URL }}
+          cluster-id: ${{ vars.KUBECOST_CLUSTER }}
+          setup-python: ${{ vars.KCRESIZE_SETUP_PYTHON || 'true' }}
+        env:
+          KUBECOST_AUTH_HEADER: ${{ secrets.KUBECOST_AUTH_HEADER }}
+          KUBECOST_BASIC_USER: ${{ secrets.KUBECOST_BASIC_USER }}
+          KUBECOST_BASIC_PASSWORD: ${{ secrets.KUBECOST_BASIC_PASSWORD }}
+          KCRESIZE_INTERACTIVE: ${{ vars.KCRESIZE_INTERACTIVE }}
+          # the decision notifies the ACTIONING team (work order / disapproval FYI)
+          KCRESIZE_SLACK_ACTION_WEBHOOK: ${{ secrets.KCRESIZE_SLACK_ACTION_WEBHOOK }}
+          KCRESIZE_TEAMS_ACTION_WEBHOOK: ${{ secrets.KCRESIZE_TEAMS_ACTION_WEBHOOK }}
+          KCRESIZE_WEBHOOK_URL: ${{ secrets.KCRESIZE_WEBHOOK_URL }}
+          KCRESIZE_WEBHOOK_SECRET: ${{ secrets.KCRESIZE_WEBHOOK_SECRET }}
+          KCRESIZE_SMTP_HOST: ${{ secrets.KCRESIZE_SMTP_HOST }}
+          KCRESIZE_SMTP_PORT: ${{ secrets.KCRESIZE_SMTP_PORT }}
+          KCRESIZE_SMTP_USER: ${{ secrets.KCRESIZE_SMTP_USER }}
+          KCRESIZE_SMTP_PASSWORD: ${{ secrets.KCRESIZE_SMTP_PASSWORD }}
+          KCRESIZE_SMTP_FROM: ${{ secrets.KCRESIZE_SMTP_FROM }}

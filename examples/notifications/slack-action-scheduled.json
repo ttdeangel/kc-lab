@@ -1,0 +1,12 @@
+{
+  "text": "[Kubecost] tbm-payments/fraud-scorer: Sent to Kubecost Actions - waiting for Kubecost to resize",
+  "blocks": [
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*tbm-payments/fraud-scorer: Sent to Kubecost Actions - waiting for Kubecost to resize*\nKubecost action a3980bb9-0a6c-4114-92df-2efe556a18c7 created by ops-alice\n  app: 400m/512Mi -> 10m/20Mi\nhttps://github.com/acme/platform-finops/issues/4"
+      }
+    }
+  ]
+}

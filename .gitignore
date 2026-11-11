@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.kcresize/
+kc-lab/
+productkey.json
+*.pem
+basic-auth.env
+.env
+.DS_Store
+.lab/
+lab/lab.env

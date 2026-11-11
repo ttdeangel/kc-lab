@@ -1,0 +1,41 @@
+# kcresize-gateway in the cluster. Expose /slack/interactions and /webhook publicly (Ingress or
+# Cloudflare Tunnel); it only accepts signed requests and forwards them to GitHub.
+#
+#   kubectl create namespace kcresize
+#   kubectl -n kcresize create secret generic kcresize-gateway \
+#     --from-literal=GITHUB_TOKEN=<token> --from-literal=SLACK_SIGNING_SECRET=<secret> \
+#     --from-literal=GATEWAY_SECRET=$(openssl rand -hex 32) --from-literal=GATEWAY_TOKEN=$(openssl rand -hex 24)
+#   kubectl -n kcresize create configmap kcresize-gateway-code --from-file=gateway/kcresize-gateway.py
+#   kubectl apply -f gateway/k8s.yaml        # edit GITHUB_REPOSITORY first
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: kcresize-gateway, namespace: kcresize}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: kcresize-gateway}}
+  template:
+    metadata: {labels: {app: kcresize-gateway}}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 10001}
+      containers:
+        - name: gateway
+          image: python:3.12-alpine          # or build gateway/Dockerfile
+          command: ["python3", "/app/kcresize-gateway.py"]
+          env:
+            - {name: GITHUB_REPOSITORY, value: "ttdeangel/kc-lab"}
+          envFrom: [{secretRef: {name: kcresize-gateway}}]
+          ports: [{containerPort: 8088}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8088}}
+          resources: {requests: {cpu: 10m, memory: 32Mi}, limits: {memory: 96Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts: [{name: code, mountPath: /app, readOnly: true}]
+      volumes:
+        - name: code
+          configMap: {name: kcresize-gateway-code}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: kcresize-gateway, namespace: kcresize}
+spec:
+  selector: {app: kcresize-gateway}
+  ports: [{port: 8088, targetPort: 8088}]

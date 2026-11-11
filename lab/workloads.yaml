@@ -1,0 +1,89 @@
+# Sample workloads for the kcresize end-to-end test. All are deliberately over-requested.
+# Namespaces in scope carry kcresize.io/approval=required (see .github/kcresize.json scope.namespaceLabel).
+#   kubectl apply -f lab/workloads.yaml      (lab/setup.sh does this)
+# Kubecost needs a few hours of usage data before recommendations settle.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tbm-payments
+  labels: {purpose: kubecost-action-qa, team: fraud, kcresize.io/approval: required}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shop-prod
+  labels: {purpose: kubecost-action-qa, env: prod, team: shop, kcresize.io/approval: required}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shop-dev
+  labels: {purpose: kubecost-action-qa, env: dev, team: shop, kcresize.io/approval: required}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: fraud-scorer, namespace: tbm-payments, labels: {app: fraud-scorer, Team: fraud}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: fraud-scorer}}
+  template:
+    metadata: {labels: {app: fraud-scorer, Team: fraud}}
+    spec:
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.9
+          resources: {requests: {cpu: 400m, memory: 512Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: checkout-api, namespace: tbm-payments, labels: {app: checkout-api, Team: fraud}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: checkout-api}}
+  template:
+    metadata: {labels: {app: checkout-api, Team: fraud}}
+    spec:
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.9
+          resources: {requests: {cpu: 200m, memory: 256Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: api, namespace: shop-prod, labels: {app: api}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: api}}
+  template:
+    metadata: {labels: {app: api}}
+    spec:
+      containers:
+        - name: api
+          image: python:3.12-alpine
+          env: [{name: BUSY, value: "0.08"}, {name: MEM_MB, value: "96"}]
+          command: ["python3", "-c"]
+          args:
+            - |
+              import os, time
+              keep = bytearray(int(os.environ["MEM_MB"]) << 20)
+              busy = float(os.environ["BUSY"])
+              while True:
+                  t = time.time()
+                  while time.time() - t < busy * 0.1: pass
+                  time.sleep(0.1 * (1 - busy))
+          resources: {requests: {cpu: 300m, memory: 512Mi}, limits: {memory: 1Gi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: web, namespace: shop-dev, labels: {app: web}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: web}}
+  template:
+    metadata: {labels: {app: web}}
+    spec:
+      containers:
+        - name: web
+          image: python:3.12-alpine
+          command: ["python3", "-m", "http.server", "8080"]
+          resources: {requests: {cpu: 200m, memory: 256Mi}, limits: {memory: 512Mi}}

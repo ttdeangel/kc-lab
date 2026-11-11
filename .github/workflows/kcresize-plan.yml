@@ -1,0 +1,63 @@
+# Find right-sizing opportunities and ask owners to approve or disapprove.
+# Creates one issue per workload (assigned to its owners) and sends the approval request to the
+# owner channels configured in .github/kcresize.json (email / Slack / Teams / webhook).
+name: kcresize - plan
+
+on:
+  schedule:
+    - cron: "17 15 * * 1-5"      # weekdays 15:17 UTC
+  workflow_dispatch:
+    inputs:
+      read-only:
+        description: "Preview only: write nothing, notify nobody"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: kcresize-state
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ${{ fromJSON(vars.KCRESIZE_RUNS_ON || '"ubuntu-latest"') }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Kubecost
+        uses: ./
+        with:
+          command: doctor
+          kubecost-url: ${{ vars.KUBECOST_URL }}
+          cluster-id: ${{ vars.KUBECOST_CLUSTER }}
+          setup-python: ${{ vars.KCRESIZE_SETUP_PYTHON || 'true' }}
+        env:
+          KUBECOST_AUTH_HEADER: ${{ secrets.KUBECOST_AUTH_HEADER }}
+          KUBECOST_BASIC_USER: ${{ secrets.KUBECOST_BASIC_USER }}
+          KUBECOST_BASIC_PASSWORD: ${{ secrets.KUBECOST_BASIC_PASSWORD }}
+      - name: Plan and notify owners
+        id: plan
+        uses: ./
+        with:
+          command: plan
+          kubecost-url: ${{ vars.KUBECOST_URL }}
+          cluster-id: ${{ vars.KUBECOST_CLUSTER }}
+          read-only: ${{ inputs.read-only || 'false' }}
+          setup-python: "false"
+        env:
+          KUBECOST_AUTH_HEADER: ${{ secrets.KUBECOST_AUTH_HEADER }}
+          KUBECOST_BASIC_USER: ${{ secrets.KUBECOST_BASIC_USER }}
+          KUBECOST_BASIC_PASSWORD: ${{ secrets.KUBECOST_BASIC_PASSWORD }}
+          KCRESIZE_INTERACTIVE: ${{ vars.KCRESIZE_INTERACTIVE }}
+          KCRESIZE_SLACK_OWNER_WEBHOOK: ${{ secrets.KCRESIZE_SLACK_OWNER_WEBHOOK }}
+          KCRESIZE_TEAMS_OWNER_WEBHOOK: ${{ secrets.KCRESIZE_TEAMS_OWNER_WEBHOOK }}
+          KCRESIZE_WEBHOOK_URL: ${{ secrets.KCRESIZE_WEBHOOK_URL }}
+          KCRESIZE_WEBHOOK_SECRET: ${{ secrets.KCRESIZE_WEBHOOK_SECRET }}
+          KCRESIZE_SMTP_HOST: ${{ secrets.KCRESIZE_SMTP_HOST }}
+          KCRESIZE_SMTP_PORT: ${{ secrets.KCRESIZE_SMTP_PORT }}
+          KCRESIZE_SMTP_USER: ${{ secrets.KCRESIZE_SMTP_USER }}
+          KCRESIZE_SMTP_PASSWORD: ${{ secrets.KCRESIZE_SMTP_PASSWORD }}
+          KCRESIZE_SMTP_FROM: ${{ secrets.KCRESIZE_SMTP_FROM }}
+      - run: echo "Filed ${{ steps.plan.outputs.proposals }} proposal(s), est. \$${{ steps.plan.outputs.savings }}/mo"

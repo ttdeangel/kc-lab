@@ -1,0 +1,59 @@
+{
+  "type": "message",
+  "attachments": [
+    {
+      "contentType": "application/vnd.microsoft.card.adaptive",
+      "content": {
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "msteams": {
+          "width": "Full"
+        },
+        "body": [
+          {
+            "type": "TextBlock",
+            "text": "Work order: resize tbm-payments/fraud-scorer (approved by fraud-owner)",
+            "weight": "Bolder",
+            "size": "Medium",
+            "wrap": true
+          },
+          {
+            "type": "FactSet",
+            "facts": [
+              {
+                "title": "Workload",
+                "value": "tbm-payments/fraud-scorer"
+              },
+              {
+                "title": "Est. savings",
+                "value": "$12.43/mo"
+              }
+            ]
+          },
+          {
+            "type": "TextBlock",
+            "text": "Approved by fraud-owner: \u201ctraffic is flat\u201d",
+            "wrap": true
+          },
+          {
+            "type": "TextBlock",
+            "text": "  app: 400m/512Mi -> 10m/20Mi",
+            "wrap": true
+          },
+          {
+            "type": "TextBlock",
+            "text": "https://github.com/acme/platform-finops/issues/4",
+            "wrap": true
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.OpenUrl",
+            "title": "Open",
+            "url": "https://github.com/acme/platform-finops/issues/4"
+          }
+        ]
+      }
+    }
+  ]
+}

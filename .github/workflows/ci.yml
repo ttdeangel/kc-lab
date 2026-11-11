@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.9", "3.12"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Unit + end-to-end tests (mock Kubecost + mock GitHub)
+        run: python -m unittest discover -s tests -v
+      - name: Byte-compile
+        run: python -m compileall -q kcresize gateway
+
+  action-smoke:
+    # Exercise action.yml itself against the mock Kubecost, file state, notifications as dry-run files.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tests/mock_kubecost.py 9099 &
+      - name: doctor
+        uses: ./
+        with: {command: doctor, kubecost-url: "http://127.0.0.1:9099", cluster-id: example-cluster, config: examples/config/kcresize.json, state: file}
+      - name: plan
+        uses: ./
+        with: {command: plan, kubecost-url: "http://127.0.0.1:9099", cluster-id: example-cluster, config: examples/config/kcresize.json, state: file, setup-python: "false"}
+        env: {KCRESIZE_NOTIFY_DRY_RUN: "1"}
+      - name: owner approves
+        uses: ./
+        with: {command: approve, args: "tbm-payments/fraud-scorer --reason 'ci smoke' --actor fraud-lead", kubecost-url: "http://127.0.0.1:9099", cluster-id: example-cluster, config: examples/config/kcresize.json, state: file, setup-python: "false"}
+        env: {KCRESIZE_NOTIFY_DRY_RUN: "1"}
+      - name: actioning applies
+        id: apply
+        uses: ./
+        with: {command: apply, args: "tbm-payments/fraud-scorer --actor platform-oncall", kubecost-url: "http://127.0.0.1:9099", cluster-id: example-cluster, config: examples/config/kcresize.json, state: file, fail-on-denied: "true", setup-python: "false"}
+        env: {KCRESIZE_NOTIFY_DRY_RUN: "1"}
+      - name: watch
+        uses: ./
+        with: {command: watch, kubecost-url: "http://127.0.0.1:9099", cluster-id: example-cluster, config: examples/config/kcresize.json, state: file, setup-python: "false"}
+        env: {KCRESIZE_NOTIFY_DRY_RUN: "1"}
+      - name: verify
+        run: |
+          test -n "${{ steps.apply.outputs.action-id }}"
+          python3 -c "import json; s=json.load(open('.kcresize/state.json')); st=s['proposals']['tbm-payments/fraud-scorer']['status']; print(st); assert st=='applied'"
+          ls .kcresize/outbox

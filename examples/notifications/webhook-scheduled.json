@@ -1,0 +1,97 @@
+{
+  "event": "scheduled",
+  "audience": "actioning",
+  "time": "2026-11-11T01:43:03Z",
+  "workload": "tbm-payments/fraud-scorer",
+  "plan": "plan-20261111-014303",
+  "status": "scheduled",
+  "link": "https://github.com/acme/platform-finops/issues/4",
+  "proposal": {
+    "id": "tbm-payments/fraud-scorer",
+    "planId": "plan-20261111-014303",
+    "cluster": "example-cluster",
+    "namespace": "tbm-payments",
+    "controller": "fraud-scorer",
+    "kind": "deployment",
+    "env": "nonprod",
+    "profile": "Development",
+    "team": "fraud",
+    "owners": {
+      "github": [
+        "fraud-owner"
+      ],
+      "email": [
+        "fraud@example.com"
+      ]
+    },
+    "containers": [
+      {
+        "container": "app",
+        "current": {
+          "cpu": "400m",
+          "memory": "512Mi",
+          "cpuM": 400,
+          "memMi": 512
+        },
+        "proposed": {
+          "cpu": "10m",
+          "memory": "20Mi",
+          "cpuM": 10,
+          "memMi": 20
+        },
+        "maxUsage": {
+          "cpu": "2m",
+          "memory": "1Mi"
+        },
+        "monthlySavings": 12.43,
+        "blocked": [],
+        "largeCut": false
+      }
+    ],
+    "blocked": [],
+    "largeCut": false,
+    "monthlySavings": 12.43,
+    "allocation": {
+      "dataMinutes": 1333,
+      "start": "2026-11-10T02:21:00Z",
+      "end": "2026-11-11T00:34:00Z",
+      "monthlyCost": 15.11,
+      "cpuRequestM": 350.0,
+      "cpuUsageM": 0.2,
+      "ramRequestMi": 448.3,
+      "ramUsageMi": 0.4,
+      "efficiencyPct": 0.06,
+      "cpuEfficiencyPct": 0.06,
+      "ramEfficiencyPct": 0.08
+    },
+    "projectedMonthlyCost": 2.68,
+    "status": "scheduled",
+    "history": [
+      {
+        "time": "2026-11-11T01:43:03Z",
+        "event": "planned",
+        "actor": "kcresize"
+      },
+      {
+        "time": "2026-11-11T01:43:03Z",
+        "event": "approved",
+        "actor": "fraud-owner",
+        "detail": "traffic is flat"
+      },
+      {
+        "time": "2026-11-11T01:43:03Z",
+        "event": "scheduled",
+        "actor": "ops-alice",
+        "detail": "Kubecost action a3980bb9-0a6c-4114-92df-2efe556a18c7"
+      }
+    ],
+    "decidedBy": "fraud-owner",
+    "decidedAt": "2026-11-11T01:43:03Z",
+    "reason": "traffic is flat",
+    "actionId": "a3980bb9-0a6c-4114-92df-2efe556a18c7",
+    "actionName": "kcresize-20261111-014303-tbm-payments-fraud-scorer",
+    "scheduledAt": "2026-11-11T01:43:03Z",
+    "actionedBy": "ops-alice"
+  },
+  "detail": "Kubecost action a3980bb9-0a6c-4114-92df-2efe556a18c7 created by ops-alice"
+}

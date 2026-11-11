@@ -1,0 +1,69 @@
+{
+  "text": "Kubecost resize approval needed: tbm-payments/checkout-api (save ~$10.03/mo)",
+  "blocks": [
+    {
+      "type": "header",
+      "text": {
+        "type": "plain_text",
+        "text": "Kubecost resize approval needed"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*tbm-payments/checkout-api* (nonprod, profile Development)\nNow $15.11/mo \u00b7 CPU 0.2m used of 350.0m \u00b7 RAM 0.4Mi of 448.3Mi \u00b7 efficiency 0.06%\n`app` 200m/256Mi \u2192 *10m/20Mi*\nSaves ~$10.03/mo"
+      }
+    },
+    {
+      "type": "input",
+      "block_id": "reason|plan-20261111-014303|tbm-payments/checkout-api",
+      "optional": true,
+      "label": {
+        "type": "plain_text",
+        "text": "Reason (required to disapprove)"
+      },
+      "element": {
+        "type": "plain_text_input",
+        "action_id": "reason",
+        "multiline": true,
+        "max_length": 500
+      }
+    },
+    {
+      "type": "actions",
+      "block_id": "kc|plan-20261111-014303|tbm-payments/checkout-api",
+      "elements": [
+        {
+          "type": "button",
+          "action_id": "kc_approve",
+          "style": "primary",
+          "text": {
+            "type": "plain_text",
+            "text": "Approve"
+          },
+          "value": "plan-20261111-014303|tbm-payments/checkout-api"
+        },
+        {
+          "type": "button",
+          "action_id": "kc_disapprove",
+          "style": "danger",
+          "text": {
+            "type": "plain_text",
+            "text": "Disapprove"
+          },
+          "value": "plan-20261111-014303|tbm-payments/checkout-api"
+        }
+      ]
+    },
+    {
+      "type": "context",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "Your decision is all that is needed; the platform team makes the change."
+        }
+      ]
+    }
+  ]
+}

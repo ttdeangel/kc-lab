@@ -1,0 +1,77 @@
+{
+  "event": "approval_requested",
+  "audience": "owner",
+  "time": "2026-11-11T01:43:03Z",
+  "workload": "tbm-payments/checkout-api",
+  "plan": "plan-20261111-014303",
+  "status": "pending",
+  "link": "https://github.com/acme/platform-finops/issues/3",
+  "proposal": {
+    "id": "tbm-payments/checkout-api",
+    "planId": "plan-20261111-014303",
+    "cluster": "example-cluster",
+    "namespace": "tbm-payments",
+    "controller": "checkout-api",
+    "kind": "deployment",
+    "env": "nonprod",
+    "profile": "Development",
+    "team": "fraud",
+    "owners": {
+      "github": [
+        "fraud-owner"
+      ],
+      "email": [
+        "fraud@example.com"
+      ]
+    },
+    "containers": [
+      {
+        "container": "app",
+        "current": {
+          "cpu": "200m",
+          "memory": "256Mi",
+          "cpuM": 200,
+          "memMi": 256
+        },
+        "proposed": {
+          "cpu": "10m",
+          "memory": "20Mi",
+          "cpuM": 10,
+          "memMi": 20
+        },
+        "maxUsage": {
+          "cpu": "2m",
+          "memory": "1Mi"
+        },
+        "monthlySavings": 10.03,
+        "blocked": [],
+        "largeCut": false
+      }
+    ],
+    "blocked": [],
+    "largeCut": false,
+    "monthlySavings": 10.03,
+    "allocation": {
+      "dataMinutes": 1333,
+      "start": "2026-11-10T02:21:00Z",
+      "end": "2026-11-11T00:34:00Z",
+      "monthlyCost": 15.11,
+      "cpuRequestM": 350.0,
+      "cpuUsageM": 0.2,
+      "ramRequestMi": 448.3,
+      "ramUsageMi": 0.4,
+      "efficiencyPct": 0.06,
+      "cpuEfficiencyPct": 0.06,
+      "ramEfficiencyPct": 0.08
+    },
+    "projectedMonthlyCost": 5.08,
+    "status": "pending",
+    "history": [
+      {
+        "time": "2026-11-11T01:43:03Z",
+        "event": "planned",
+        "actor": "kcresize"
+      }
+    ]
+  }
+}

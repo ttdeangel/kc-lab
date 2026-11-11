@@ -1,0 +1,12 @@
+{
+  "text": "[Kubecost] No action needed: tbm-payments/checkout-api disapproved",
+  "blocks": [
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*No action needed: tbm-payments/checkout-api disapproved*\nDisapproved by fraud-owner. Reason: \u201cPCI freeze this week\u201d\n  app: 200m/256Mi -> 10m/20Mi\nhttps://github.com/acme/platform-finops/issues/3"
+      }
+    }
+  ]
+}

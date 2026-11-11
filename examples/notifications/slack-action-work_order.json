@@ -1,0 +1,38 @@
+{
+  "text": "[Kubecost] Work order: resize tbm-payments/fraud-scorer (approved by fraud-owner)",
+  "blocks": [
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Work order: resize tbm-payments/fraud-scorer (approved by fraud-owner)*\nApproved by fraud-owner: \u201ctraffic is flat\u201d\n  app: 400m/512Mi -> 10m/20Mi\nhttps://github.com/acme/platform-finops/issues/4"
+      }
+    },
+    {
+      "type": "actions",
+      "block_id": "kcwo|plan-20261111-014303|tbm-payments/fraud-scorer",
+      "elements": [
+        {
+          "type": "button",
+          "action_id": "kc_apply",
+          "style": "primary",
+          "text": {
+            "type": "plain_text",
+            "text": "Apply via Kubecost"
+          },
+          "value": "plan-20261111-014303|tbm-payments/fraud-scorer"
+        },
+        {
+          "type": "button",
+          "action_id": "kc_decline",
+          "style": "danger",
+          "text": {
+            "type": "plain_text",
+            "text": "Decline"
+          },
+          "value": "plan-20261111-014303|tbm-payments/fraud-scorer"
+        }
+      ]
+    }
+  ]
+}

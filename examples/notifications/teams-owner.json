@@ -1,0 +1,88 @@
+{
+  "type": "message",
+  "attachments": [
+    {
+      "contentType": "application/vnd.microsoft.card.adaptive",
+      "content": {
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "msteams": {
+          "width": "Full"
+        },
+        "body": [
+          {
+            "type": "TextBlock",
+            "text": "Kubecost resize approval needed",
+            "weight": "Bolder",
+            "size": "Medium",
+            "wrap": true
+          },
+          {
+            "type": "FactSet",
+            "facts": [
+              {
+                "title": "Workload",
+                "value": "tbm-payments/checkout-api"
+              },
+              {
+                "title": "Env / profile",
+                "value": "nonprod / Development"
+              },
+              {
+                "title": "Cost now",
+                "value": "$15.11/mo"
+              },
+              {
+                "title": "Efficiency",
+                "value": "0.06%"
+              },
+              {
+                "title": "Est. savings",
+                "value": "$10.03/mo"
+              }
+            ]
+          },
+          {
+            "type": "TextBlock",
+            "text": "app: 200m/256Mi \u2192 **10m/20Mi**",
+            "wrap": true
+          },
+          {
+            "type": "TextBlock",
+            "text": "Your decision is all that is needed; the platform team makes the change.",
+            "wrap": true
+          },
+          {
+            "type": "Input.Text",
+            "id": "reason",
+            "isMultiline": true,
+            "maxLength": 500,
+            "placeholder": "Reason (required to disapprove)"
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.Submit",
+            "title": "Approve",
+            "style": "positive",
+            "data": {
+              "event": "approve",
+              "workload": "tbm-payments/checkout-api",
+              "plan": "plan-20261111-014303"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "Disapprove",
+            "style": "destructive",
+            "data": {
+              "event": "disapprove",
+              "workload": "tbm-payments/checkout-api",
+              "plan": "plan-20261111-014303"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

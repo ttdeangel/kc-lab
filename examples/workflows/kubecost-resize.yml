@@ -1,0 +1,81 @@
+# Drop-in workflow for ANY repository that should run Kubecost resize approvals.
+# Copy to .github/workflows/kubecost-resize.yml, add .github/kcresize.json (see examples/config),
+# set repo variables KUBECOST_URL / KUBECOST_CLUSTER (+ KCRESIZE_RUNS_ON for self-hosted runners),
+# create the `kubecost-actioning` environment, and add channel secrets you use.
+name: kubecost-resize
+
+on:
+  schedule:
+    - cron: "17 15 * * 1-5"        # plan: weekdays
+    - cron: "*/15 * * * *"         # watch
+  issue_comment:
+    types: [created]
+  repository_dispatch:
+    types: [kcresize]              # from gateway/ (Slack, Teams, signed webhooks)
+  workflow_dispatch:
+    inputs:
+      command: {description: "plan | watch", required: true, default: plan, type: choice, options: [plan, watch]}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: kcresize-state
+  cancel-in-progress: false
+
+env:
+  KUBECOST_BASIC_USER: ${{ secrets.KUBECOST_BASIC_USER }}
+  KUBECOST_BASIC_PASSWORD: ${{ secrets.KUBECOST_BASIC_PASSWORD }}
+  KCRESIZE_INTERACTIVE: ${{ vars.KCRESIZE_INTERACTIVE }}
+  KCRESIZE_SMTP_HOST: ${{ secrets.KCRESIZE_SMTP_HOST }}
+  KCRESIZE_SMTP_PORT: ${{ secrets.KCRESIZE_SMTP_PORT }}
+  KCRESIZE_SMTP_USER: ${{ secrets.KCRESIZE_SMTP_USER }}
+  KCRESIZE_SMTP_PASSWORD: ${{ secrets.KCRESIZE_SMTP_PASSWORD }}
+  KCRESIZE_SMTP_FROM: ${{ secrets.KCRESIZE_SMTP_FROM }}
+  KCRESIZE_SLACK_OWNER_WEBHOOK: ${{ secrets.KCRESIZE_SLACK_OWNER_WEBHOOK }}
+  KCRESIZE_SLACK_ACTION_WEBHOOK: ${{ secrets.KCRESIZE_SLACK_ACTION_WEBHOOK }}
+  KCRESIZE_TEAMS_OWNER_WEBHOOK: ${{ secrets.KCRESIZE_TEAMS_OWNER_WEBHOOK }}
+  KCRESIZE_TEAMS_ACTION_WEBHOOK: ${{ secrets.KCRESIZE_TEAMS_ACTION_WEBHOOK }}
+  KCRESIZE_WEBHOOK_URL: ${{ secrets.KCRESIZE_WEBHOOK_URL }}
+  KCRESIZE_WEBHOOK_SECRET: ${{ secrets.KCRESIZE_WEBHOOK_SECRET }}
+
+jobs:
+  plan:
+    if: (github.event_name == 'schedule' && github.event.schedule == '17 15 * * 1-5') || (github.event_name == 'workflow_dispatch' && inputs.command == 'plan')
+    runs-on: ${{ fromJSON(vars.KCRESIZE_RUNS_ON || '"ubuntu-latest"') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ttdeangel/kc-lab@v1
+        with: {command: plan, kubecost-url: "${{ vars.KUBECOST_URL }}", cluster-id: "${{ vars.KUBECOST_CLUSTER }}"}
+
+  watch:
+    if: (github.event_name == 'schedule' && github.event.schedule == '*/15 * * * *') || (github.event_name == 'workflow_dispatch' && inputs.command == 'watch')
+    runs-on: ${{ fromJSON(vars.KCRESIZE_RUNS_ON || '"ubuntu-latest"') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ttdeangel/kc-lab@v1
+        with: {command: watch, kubecost-url: "${{ vars.KUBECOST_URL }}", cluster-id: "${{ vars.KUBECOST_CLUSTER }}"}
+
+  owner:
+    if: >-
+      (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'kcresize') &&
+        (startsWith(github.event.comment.body, '/approve') || startsWith(github.event.comment.body, '/disapprove'))) ||
+      (github.event_name == 'repository_dispatch' && contains(fromJSON('["approve","approve_force","disapprove"]'), github.event.client_payload.event))
+    runs-on: ${{ fromJSON(vars.KCRESIZE_RUNS_ON || '"ubuntu-latest"') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ttdeangel/kc-lab@v1
+        with: {command: event, role: owner, kubecost-url: "${{ vars.KUBECOST_URL }}", cluster-id: "${{ vars.KUBECOST_CLUSTER }}"}
+
+  actioning:
+    if: >-
+      (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'kcresize') &&
+        (startsWith(github.event.comment.body, '/apply') || startsWith(github.event.comment.body, '/decline'))) ||
+      (github.event_name == 'repository_dispatch' && contains(fromJSON('["apply","decline"]'), github.event.client_payload.event))
+    runs-on: ${{ fromJSON(vars.KCRESIZE_RUNS_ON || '"ubuntu-latest"') }}
+    environment: kubecost-actioning
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ttdeangel/kc-lab@v1
+        with: {command: event, role: actioning, fail-on-denied: "true", kubecost-url: "${{ vars.KUBECOST_URL }}", cluster-id: "${{ vars.KUBECOST_CLUSTER }}"}

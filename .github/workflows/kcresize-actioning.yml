@@ -1,0 +1,63 @@
+# Actioning team: apply an approved proposal through Kubecost Actions, or decline it.
+#   - issue comment   /apply   |   /decline <reason>
+#   - Slack / Teams   "Apply via Kubecost" / "Decline" buttons via gateway -> repository_dispatch
+#   - manual form     workflow_dispatch
+# Two gates: the actor must be in actioning.* (.github/kcresize.json) AND the job runs in the
+# `kubecost-actioning` environment (add required reviewers there for a second sign-off).
+name: kcresize - actioning
+
+on:
+  issue_comment:
+    types: [created]
+  repository_dispatch:
+    types: [kcresize]
+  workflow_dispatch:
+    inputs:
+      workload: {description: "namespace/deployment", required: true}
+      action: {description: "apply or decline", required: true, type: choice, options: [apply, decline]}
+      reason: {description: "Reason (for decline)", required: false}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: kcresize-state
+  cancel-in-progress: false
+
+jobs:
+  action:
+    if: >-
+      (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'kcresize') &&
+        (startsWith(github.event.comment.body, '/apply') || startsWith(github.event.comment.body, '/decline'))) ||
+      (github.event_name == 'repository_dispatch' &&
+        contains(fromJSON('["apply","decline"]'), github.event.client_payload.event)) ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ${{ fromJSON(vars.KCRESIZE_RUNS_ON || '"ubuntu-latest"') }}
+    environment: kubecost-actioning
+    steps:
+      - uses: actions/checkout@v4
+      - id: kc
+        uses: ./
+        with:
+          command: event
+          role: actioning
+          kubecost-url: ${{ vars.KUBECOST_URL }}
+          cluster-id: ${{ vars.KUBECOST_CLUSTER }}
+          fail-on-denied: "true"
+          setup-python: ${{ vars.KCRESIZE_SETUP_PYTHON || 'true' }}
+        env:
+          KUBECOST_AUTH_HEADER: ${{ secrets.KUBECOST_AUTH_HEADER }}
+          KUBECOST_BASIC_USER: ${{ secrets.KUBECOST_BASIC_USER }}
+          KUBECOST_BASIC_PASSWORD: ${{ secrets.KUBECOST_BASIC_PASSWORD }}
+          KCRESIZE_SLACK_ACTION_WEBHOOK: ${{ secrets.KCRESIZE_SLACK_ACTION_WEBHOOK }}
+          KCRESIZE_TEAMS_ACTION_WEBHOOK: ${{ secrets.KCRESIZE_TEAMS_ACTION_WEBHOOK }}
+          KCRESIZE_WEBHOOK_URL: ${{ secrets.KCRESIZE_WEBHOOK_URL }}
+          KCRESIZE_WEBHOOK_SECRET: ${{ secrets.KCRESIZE_WEBHOOK_SECRET }}
+          KCRESIZE_SMTP_HOST: ${{ secrets.KCRESIZE_SMTP_HOST }}
+          KCRESIZE_SMTP_PORT: ${{ secrets.KCRESIZE_SMTP_PORT }}
+          KCRESIZE_SMTP_USER: ${{ secrets.KCRESIZE_SMTP_USER }}
+          KCRESIZE_SMTP_PASSWORD: ${{ secrets.KCRESIZE_SMTP_PASSWORD }}
+          KCRESIZE_SMTP_FROM: ${{ secrets.KCRESIZE_SMTP_FROM }}
+      - if: steps.kc.outputs.action-id != ''
+        run: echo "Kubecost action ${{ steps.kc.outputs.action-id }} created; kcresize - watch confirms the resize (typically within ~70 min)."

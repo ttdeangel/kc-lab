@@ -1,0 +1,59 @@
+{
+  "type": "message",
+  "attachments": [
+    {
+      "contentType": "application/vnd.microsoft.card.adaptive",
+      "content": {
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "msteams": {
+          "width": "Full"
+        },
+        "body": [
+          {
+            "type": "TextBlock",
+            "text": "tbm-payments/fraud-scorer: Sent to Kubecost Actions - waiting for Kubecost to resize",
+            "weight": "Bolder",
+            "size": "Medium",
+            "wrap": true
+          },
+          {
+            "type": "FactSet",
+            "facts": [
+              {
+                "title": "Workload",
+                "value": "tbm-payments/fraud-scorer"
+              },
+              {
+                "title": "Est. savings",
+                "value": "$12.43/mo"
+              }
+            ]
+          },
+          {
+            "type": "TextBlock",
+            "text": "Kubecost action a3980bb9-0a6c-4114-92df-2efe556a18c7 created by ops-alice",
+            "wrap": true
+          },
+          {
+            "type": "TextBlock",
+            "text": "  app: 400m/512Mi -> 10m/20Mi",
+            "wrap": true
+          },
+          {
+            "type": "TextBlock",
+            "text": "https://github.com/acme/platform-finops/issues/4",
+            "wrap": true
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.OpenUrl",
+            "title": "Open",
+            "url": "https://github.com/acme/platform-finops/issues/4"
+          }
+        ]
+      }
+    }
+  ]
+}

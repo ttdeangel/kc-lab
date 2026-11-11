@@ -1,0 +1,47 @@
+{
+  "kubecost": {
+    "cluster": "example-cluster",
+    "window": "48h",
+    "allocationWindow": "7d"
+  },
+  "scope": {
+    "namespaces": ["tbm-payments", "shop-prod", "shop-dev"],
+    "namespaceLabel": "",
+    "exclude": ["kube-system", "kube-public", "kube-node-lease", "kubecost", "local-path-storage", "objectstore"],
+    "controllerKinds": ["deployment"]
+  },
+  "profiles": {
+    "envLabel": "env",
+    "prodValues": ["prod", "production"],
+    "prod": "Production",
+    "default": "Development"
+  },
+  "guardrails": {
+    "minChangePct": 10,
+    "maxUpFactor": 4,
+    "maxDownPctProd": 80,
+    "driftPct": 20,
+    "approvalTtlHours": 120
+  },
+  "owners": {
+    "tbm-payments": {
+      "github": ["fraud-lead", "@acme/payments-leads"],
+      "email": ["payments-owners@example.com"],
+      "ids": ["U0PAYMENTS1"],
+      "slack": "KCRESIZE_SLACK_PAYMENTS_WEBHOOK"
+    },
+    "shop-prod": {"github": ["shop-lead"], "email": ["shop-owners@example.com"]},
+    "shop-dev": {"github": ["shop-lead"], "email": ["shop-owners@example.com"]}
+  },
+  "defaultOwner": {"github": [], "email": []},
+  "actioning": {
+    "github": ["platform-oncall", "@acme/platform"],
+    "email": ["platform-team@example.com"],
+    "ids": ["U0PLATFORM1", "ops@example.com"]
+  },
+  "notify": {
+    "owner": ["email", "slack", "teams", "webhook"],
+    "actioning": ["email", "slack", "teams", "webhook"]
+  },
+  "state": "github"
+}

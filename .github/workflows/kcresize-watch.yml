@@ -1,0 +1,42 @@
+# Confirm resizes from Kubecost's completed-actions record, delete the one-shot actions
+# (their maintenance window repeats weekly), expire approvals nobody actioned, and tell the
+# actioning team. Kubecost typically picks up a new action and completes it within ~1-1.5 h.
+name: kcresize - watch
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: kcresize-state
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ${{ fromJSON(vars.KCRESIZE_RUNS_ON || '"ubuntu-latest"') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          command: watch
+          kubecost-url: ${{ vars.KUBECOST_URL }}
+          cluster-id: ${{ vars.KUBECOST_CLUSTER }}
+          setup-python: ${{ vars.KCRESIZE_SETUP_PYTHON || 'true' }}
+        env:
+          KUBECOST_AUTH_HEADER: ${{ secrets.KUBECOST_AUTH_HEADER }}
+          KUBECOST_BASIC_USER: ${{ secrets.KUBECOST_BASIC_USER }}
+          KUBECOST_BASIC_PASSWORD: ${{ secrets.KUBECOST_BASIC_PASSWORD }}
+          KCRESIZE_SLACK_ACTION_WEBHOOK: ${{ secrets.KCRESIZE_SLACK_ACTION_WEBHOOK }}
+          KCRESIZE_TEAMS_ACTION_WEBHOOK: ${{ secrets.KCRESIZE_TEAMS_ACTION_WEBHOOK }}
+          KCRESIZE_WEBHOOK_URL: ${{ secrets.KCRESIZE_WEBHOOK_URL }}
+          KCRESIZE_WEBHOOK_SECRET: ${{ secrets.KCRESIZE_WEBHOOK_SECRET }}
+          KCRESIZE_SMTP_HOST: ${{ secrets.KCRESIZE_SMTP_HOST }}
+          KCRESIZE_SMTP_PORT: ${{ secrets.KCRESIZE_SMTP_PORT }}
+          KCRESIZE_SMTP_USER: ${{ secrets.KCRESIZE_SMTP_USER }}
+          KCRESIZE_SMTP_PASSWORD: ${{ secrets.KCRESIZE_SMTP_PASSWORD }}
+          KCRESIZE_SMTP_FROM: ${{ secrets.KCRESIZE_SMTP_FROM }}
