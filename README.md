@@ -24,6 +24,24 @@ Verified end to end against Kubecost **3.3.1**: an API-created action resized a 
 
 ---
 
+## `kcctl`: one CLI for everything
+```bash
+git clone https://github.com/ttdeangel/kc-lab && cd kc-lab
+./kcctl install            # symlink onto your PATH (/usr/local/bin or ~/.local/bin)
+kcctl init                 # asks for cluster name, port, owner, emails -> lab/lab.env
+kcctl bootstrap            # lab up + repo config + GitHub vars/environment + runner + doctor
+```
+| Area | Commands |
+|---|---|
+| Settings | `init [--yes]`, `env`, `install [DIR]`, `completion bash\|zsh` |
+| Lab (kind + Kubecost) | `preflight`, `up`, `destroy`, `runtime`, `ui`, `workloads`, `lab <any kc-lab.sh step>` (e.g. `lab status`, `lab share`) |
+| GitHub wiring | `config`, `secrets`, `runner`, `doctor`, `setup <any setup.sh step>` (e.g. `setup runner-remove`) |
+| Approvals, local | `plan [--read-only]`, `status`, `show`, `approve`, `disapprove --reason`, `apply`, `decline`, `watch [--wait MIN]`. Add `--as USER` to act as someone, `--github` to use the repo's issues instead of the local file |
+| Approvals, in Actions | `run plan [--read-only]`, `run watch`, `runs`, `issues` |
+| End to end | `e2e [ns/name]` (local full flow against the lab), `teardown` (runner + repo variables + cluster) |
+
+`kcctl` reads `lab/lab.env` (or `KCCTL_ENV=<file>`), so nothing is tied to a machine or person. It runs on the bash 3.2 that ships with macOS.
+
 ## Quick start (an existing Kubecost)
 
 1. **Prerequisites in Kubecost:**
@@ -134,10 +152,11 @@ KUBECOST_URL=https://demo.kubecost.io KUBECOST_CLUSTER=kc-demo-prod KCRESIZE_NAM
 ```
 
 ## Lab
-[`lab/`](lab/README.md) builds a kind + Kubecost 3.3.1 lab on macOS (Colima) or EC2. Every name (cluster, port, people, runner) comes from `lab/lab.env`, and the defaults run it next to an existing lab without touching it. It adds sample workloads, connects the repo (variables, environment, labels, secrets) and installs a self-hosted runner, then walks through a full end-to-end test table.
+[`lab/`](lab/README.md) (driven by `kcctl`) builds a kind + Kubecost 3.3.1 lab on macOS (Colima) or EC2. Every name (cluster, port, people, runner) comes from `lab/lab.env`, and the defaults run it next to an existing lab without touching it. It adds sample workloads, connects the repo (variables, environment, labels, secrets) and installs a self-hosted runner, then walks through a full end-to-end test table.
 
 ## Repository layout
 ```
+kcctl                         CLI for the lab, GitHub wiring and approvals
 action.yml                    reusable composite Action (entry: python -m kcresize)
 kcresize/                     package: kubecost.py (API client) planner.py (guardrails) workflow.py (state machine)
                               state.py (GitHub issues / file) report.py (renderers) notify.py (email/Slack/Teams/webhook) cli.py

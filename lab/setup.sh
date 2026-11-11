@@ -9,6 +9,8 @@
 #   ./lab/setup.sh secrets       prompt for notification secrets (SMTP / Slack / Teams / webhook) -> repo secrets
 #   ./lab/setup.sh runner        install a self-hosted GitHub Actions runner on this machine (label kc-lab)
 #   ./lab/setup.sh doctor        check the runner can reach Kubecost and the controller is alive
+#   ./lab/setup.sh runner-remove stop, uninstall and unregister this machine's runner
+#   ./lab/setup.sh unconfigure   delete the repo variables (scheduled workflows then skip)
 #   ./lab/setup.sh all           config workloads github runner doctor
 #
 # Why a self-hosted runner: the lab's Kubecost listens on http://localhost:9090 on this machine,
@@ -108,6 +110,30 @@ step_runner() {
   fi
 }
 
+step_runner_remove() {
+  command -v gh >/dev/null || die "Install the GitHub CLI first"
+  [[ -x "$RUNNER_DIR/config.sh" ]] || { echo "No runner in $RUNNER_DIR"; return 0; }
+  local r tok; r="$(repo)"
+  log "Removing runner in $RUNNER_DIR"
+  if [[ "$(uname -s)" == Darwin ]]; then
+    ( cd "$RUNNER_DIR" && ./svc.sh stop >/dev/null 2>&1; ./svc.sh uninstall >/dev/null 2>&1 ) || true
+  else
+    ( cd "$RUNNER_DIR" && sudo ./svc.sh stop >/dev/null 2>&1; sudo ./svc.sh uninstall >/dev/null 2>&1 ) || true
+  fi
+  tok="$(gh api -X POST "repos/$r/actions/runners/remove-token" -q .token)"
+  ( cd "$RUNNER_DIR" && ./config.sh remove --token "$tok" )
+  echo "Runner removed. Delete $RUNNER_DIR yourself if you no longer need it."
+}
+
+step_unconfigure() {
+  command -v gh >/dev/null || die "Install the GitHub CLI first"
+  log "Deleting repo variables on $(repo)"
+  local v
+  for v in KUBECOST_URL KUBECOST_CLUSTER KCRESIZE_RUNS_ON KCRESIZE_SETUP_PYTHON; do
+    gh variable delete "$v" >/dev/null 2>&1 && echo "  deleted $v" || true
+  done
+}
+
 step_doctor() {
   log "kcresize doctor against $KUBECOST_URL"
   PYTHONPATH=. KUBECOST_URL="$KUBECOST_URL" KUBECOST_CLUSTER="$CLUSTER" KCRESIZE_CONFIG=.github/kcresize.json python3 -m kcresize doctor
@@ -117,7 +143,8 @@ step_doctor() {
 for s in "$@"; do
   case "$s" in
     all) step_config; step_workloads; step_github; step_runner; step_doctor ;;
-    config|workloads|github|secrets|runner|doctor) "step_$s" ;;
+    config|workloads|github|secrets|runner|doctor|unconfigure) "step_$s" ;;
+    runner-remove) step_runner_remove ;;
     *) die "unknown step $s" ;;
   esac
 done

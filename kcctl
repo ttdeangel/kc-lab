@@ -1,0 +1,289 @@
+#!/usr/bin/env bash
+# kcctl - one CLI for the Kubecost resize-approvals lab and workflow.
+#
+# Usage: kcctl <command> [args]
+#
+# Getting started
+#   init [--yes]            create lab/lab.env (asks for cluster, port, owner, email; --yes = defaults)
+#   bootstrap               init (if needed) + lab up + config + github + runner + doctor
+#   env                     show the resolved settings
+#   install [DIR]           put kcctl on your PATH (default /usr/local/bin, else ~/.local/bin)
+#   completion bash|zsh     print shell completion (eval "$(kcctl completion zsh)")
+#
+# Lab (kind + Kubecost on this machine)
+#   lab <step...>           any kc-lab.sh step: preflight up runtime status expose ui reset clean
+#                           uninstall destroy share unshare auth signing tools ...
+#   up | preflight | destroy | runtime     shortcuts for the lab steps of the same name (lab status = kcctl lab status)
+#   ui                      open the Kubecost UI in the browser
+#   workloads               (re)apply the sample workloads (lab/workloads.yaml)
+#
+# GitHub wiring (needs gh, logged in)
+#   setup <step...>         any setup.sh step: config github secrets runner runner-remove unconfigure doctor
+#   config | secrets | runner              shortcuts
+#   doctor                  check Kubecost API, controller heartbeat, profiles, overlapping actions
+#
+# Approvals, locally (file state in .lab/<cluster>/state.json unless --github)
+#   plan [--read-only]      find proposals and notify owners
+#   status                  list proposals
+#   show <ns/name>          one proposal as markdown
+#   approve <ns/name> [--reason "..."] [--force] [--as USER]
+#   disapprove <ns/name> --reason "..." [--as USER]
+#   apply <ns/name>|--all [--as USER]
+#   decline <ns/name> [--reason "..."] [--as USER]
+#   watch [--wait MIN]      confirm resizes via Kubecost (optionally keep polling for MIN minutes)
+#   Add --github to any of these to use the repository's GitHub issues instead of the local file.
+#
+# Approvals, in GitHub Actions
+#   run plan|watch [--read-only]           trigger the workflow and follow it
+#   runs                    recent workflow runs
+#   issues                  open proposals (GitHub issues labelled kcresize)
+#
+# End-to-end
+#   e2e [ns/name]           local full flow: plan -> approve -> apply -> wait for Kubecost (lab/e2e-local.sh)
+#   teardown                remove runner + repo variables + this lab's cluster (asks first)
+#
+# Global: KCCTL_ENV=<file> (default lab/lab.env), NO_COLOR=1
+set -euo pipefail
+
+KCCTL_VERSION="1.1.0"
+
+# ---------- locate the repository (follow symlinks; macOS has no readlink -f)
+self="$0"
+while [ -L "$self" ]; do
+  link="$(readlink "$self")"
+  case "$link" in /*) self="$link" ;; *) self="$(dirname "$self")/$link" ;; esac
+done
+ROOT="$(cd "$(dirname "$self")" && pwd)"
+[ -f "$ROOT/kcresize/__init__.py" ] || { echo "kcctl: cannot find the repository next to $self" >&2; exit 1; }
+LAB="$ROOT/lab"
+ENV_FILE="${KCCTL_ENV:-$LAB/lab.env}"
+
+if [ -n "${NO_COLOR:-}" ] || [ ! -t 1 ]; then B=""; G=""; Y=""; R=""; N=""
+else B=$'\033[1;34m'; G=$'\033[1;32m'; Y=$'\033[1;33m'; R=$'\033[1;31m'; N=$'\033[0m'; fi
+say()  { printf '%s==>%s %s\n' "$B" "$N" "$*"; }
+ok()   { printf '%s%s%s\n' "$G" "$*" "$N"; }
+warn() { printf '%sWARN:%s %s\n' "$Y" "$N" "$*" >&2; }
+die()  { printf '%sERROR:%s %s\n' "$R" "$N" "$*" >&2; exit 1; }
+
+load_env() {
+  # shellcheck disable=SC1090
+  [ -f "$ENV_FILE" ] && { set -a; . "$ENV_FILE"; set +a; }
+  CLUSTER="${CLUSTER:-kcresize-lab}"
+  UI_PORT="${UI_PORT:-9091}"
+  KUBECOST_URL="${KUBECOST_URL:-http://localhost:$UI_PORT}"
+  WORKDIR="${WORKDIR:-$ROOT/.lab/$CLUSTER}"
+  case "$WORKDIR" in /*) ;; *) WORKDIR="$ROOT/${WORKDIR#./}" ;; esac
+  export CLUSTER UI_PORT KUBECOST_URL WORKDIR
+}
+
+need() { command -v "$1" >/dev/null 2>&1 || die "$1 is required${2:+ ($2)}"; }
+
+# ---------- kcresize (python package) with lab settings
+kcresize() {
+  local state="file" args=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --github) state="github" ;;
+      --as) shift; export KCRESIZE_ACTOR="${1:?--as needs a name}" ;;
+      --read-only) export KCRESIZE_READ_ONLY=1 ;;
+      *) args+=("$1") ;;
+    esac
+    shift
+  done
+  need python3
+  export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
+  export KUBECOST_CLUSTER="${KUBECOST_CLUSTER:-$CLUSTER}"
+  export KCRESIZE_CONFIG="${KCRESIZE_CONFIG:-$ROOT/.github/kcresize.json}"
+  export KCRESIZE_STATE="$state"
+  export KCRESIZE_STATE_FILE="${KCRESIZE_STATE_FILE:-$WORKDIR/state.json}"
+  export KCRESIZE_OUTBOX="${KCRESIZE_OUTBOX:-$WORKDIR/outbox}"
+  if [ "$state" = github ]; then
+    need gh "brew install gh && gh auth login"
+    export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(cd "$ROOT" && gh repo view --json nameWithOwner -q .nameWithOwner)}"
+    export GITHUB_TOKEN="${GITHUB_TOKEN:-$(gh auth token)}"
+    export KCRESIZE_ACTOR="${KCRESIZE_ACTOR:-$(gh api user -q .login)}"
+  else
+    export KCRESIZE_ACTOR="${KCRESIZE_ACTOR:-${OWNER_GITHUB:-$(id -un)}}"
+  fi
+  mkdir -p "$WORKDIR"
+  python3 -m kcresize ${args[@]+"${args[@]}"}
+}
+
+# ---------- init: write lab/lab.env
+cmd_init() {
+  local yes=0
+  [ "${1:-}" = "--yes" ] || [ "${1:-}" = "-y" ] && yes=1
+  if [ -f "$ENV_FILE" ] && [ "$yes" = 0 ]; then
+    printf 'kcctl: %s exists. Overwrite? [y/N] ' "$ENV_FILE"; read -r a
+    case "$a" in y|Y) ;; *) echo "kept existing settings"; return 0 ;; esac
+  fi
+  local gh_user="" used=""
+  command -v gh >/dev/null 2>&1 && gh_user="$(gh api user -q .login 2>/dev/null || true)"
+  command -v kind >/dev/null 2>&1 && used="$(kind get clusters 2>/dev/null | tr '\n' ' ')"
+  [ -n "$used" ] && warn "existing kind clusters (will not be touched): $used"
+
+  ask() {  # ask VAR "question" default
+    local var="$1" q="$2" def="${!1:-$3}" v
+    if [ "$yes" = 1 ]; then v="$def"
+    else printf '%s [%s]: ' "$q" "$def"; read -r v; v="${v:-$def}"; fi
+    eval "$var=\$v"
+  }
+  ask CLUSTER "Cluster name (kind + Kubecost clusterId)" "kcresize-lab"
+  ask UI_PORT "Host port for the Kubecost UI/API" "9091"
+  ask OWNER_GITHUB "Owner GitHub user(s) (comma list, or @org/team)" "$gh_user"
+  ask OWNER_EMAIL "Owner email(s) for approval requests" ""
+  ask ACTIONING_GITHUB "Actioning team GitHub user(s)" "$OWNER_GITHUB"
+  ask ACTIONING_EMAIL "Actioning team email(s)" "$OWNER_EMAIL"
+  ask COLIMA_CPU "Colima CPUs (only if kcctl starts Colima)" "4"
+  ask COLIMA_MEM "Colima memory GiB" "12"
+
+  sed -e "s|^CLUSTER=.*|CLUSTER=$CLUSTER|" \
+      -e "s|^UI_PORT=.*|UI_PORT=$UI_PORT|" \
+      -e "s|^KUBECOST_URL=.*|KUBECOST_URL=http://localhost:$UI_PORT|" \
+      -e "s|^WORKDIR=.*|WORKDIR=./.lab/$CLUSTER|" \
+      -e "s|^OWNER_GITHUB=.*|OWNER_GITHUB=$OWNER_GITHUB|" \
+      -e "s|^OWNER_EMAIL=.*|OWNER_EMAIL=$OWNER_EMAIL|" \
+      -e "s|^ACTIONING_GITHUB=.*|ACTIONING_GITHUB=$ACTIONING_GITHUB|" \
+      -e "s|^ACTIONING_EMAIL=.*|ACTIONING_EMAIL=$ACTIONING_EMAIL|" \
+      -e "s|^COLIMA_CPU=.*|COLIMA_CPU=$COLIMA_CPU|" \
+      -e "s|^COLIMA_MEM=.*|COLIMA_MEM=$COLIMA_MEM|" \
+      -e "s|^RUNNER_LABEL=.*|RUNNER_LABEL=$CLUSTER|" \
+      -e "s|^RUNNER_DIR=.*|RUNNER_DIR=\$HOME/actions-runner-$CLUSTER|" \
+      "$LAB/lab.env.example" > "$ENV_FILE"
+  ok "wrote $ENV_FILE"
+  echo "Next: kcctl bootstrap   (or step by step: kcctl preflight, kcctl up, kcctl setup config github runner doctor)"
+}
+
+cmd_env() {
+  printf '%-18s %s\n' "repository" "$ROOT" "settings" "$ENV_FILE$([ -f "$ENV_FILE" ] || echo ' (missing: kcctl init)')" \
+    "cluster" "$CLUSTER" "kube context" "kind-$CLUSTER" "kubecost" "$KUBECOST_URL" "work dir" "$WORKDIR" \
+    "owner" "${OWNER_GITHUB:--} ${OWNER_EMAIL:-}" "actioning" "${ACTIONING_GITHUB:-${OWNER_GITHUB:--}} ${ACTIONING_EMAIL:-}" \
+    "runner label" "${RUNNER_LABEL:-$CLUSTER}" "kcctl" "$KCCTL_VERSION"
+  if command -v gh >/dev/null 2>&1; then
+    printf '%-18s %s\n' "github repo" "$(cd "$ROOT" && gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo '-')"
+  fi
+}
+
+cmd_install() {
+  local dir="${1:-}"
+  if [ -z "$dir" ]; then
+    if [ -w /usr/local/bin ]; then dir=/usr/local/bin; else dir="$HOME/.local/bin"; fi
+  fi
+  mkdir -p "$dir"
+  ln -sf "$ROOT/kcctl" "$dir/kcctl"
+  ok "linked $dir/kcctl -> $ROOT/kcctl"
+  case ":$PATH:" in *":$dir:"*) ;; *) warn "$dir is not on your PATH: add  export PATH=\"$dir:\$PATH\"" ;; esac
+}
+
+cmd_completion() {
+  local cmds="init bootstrap env install completion lab up preflight status destroy ui workloads setup config secrets runner doctor plan show approve disapprove apply decline watch run runs issues e2e teardown version help"
+  case "${1:-}" in
+    bash) cat <<EOF
+_kcctl() { local cur=\${COMP_WORDS[COMP_CWORD]}; if [ \$COMP_CWORD -eq 1 ]; then COMPREPLY=(\$(compgen -W "$cmds" -- "\$cur")); fi; }
+complete -F _kcctl kcctl
+EOF
+    ;;
+    zsh) cat <<EOF
+#compdef kcctl
+_kcctl() { local -a c; c=($cmds); _describe 'command' c; }
+compdef _kcctl kcctl
+EOF
+    ;;
+    *) die "usage: kcctl completion bash|zsh" ;;
+  esac
+}
+
+cmd_ui() {
+  local url="$KUBECOST_URL"
+  if command -v open >/dev/null 2>&1; then open "$url"; elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$url"; else echo "$url"; fi
+}
+
+cmd_watch() {
+  local wait=0 args=()
+  while [ $# -gt 0 ]; do
+    case "$1" in --wait) shift; wait="${1:?--wait needs minutes}" ;; *) args+=("$1") ;; esac
+    shift
+  done
+  local start; start="$(date +%s)"
+  while :; do
+    kcresize watch ${args[@]+"${args[@]}"}
+    [ "$wait" -gt 0 ] || return 0
+    kcresize status ${args[@]+"${args[@]}"} | grep -q " scheduled " || { ok "nothing left scheduled"; return 0; }
+    [ $(( $(date +%s) - start )) -lt $(( wait * 60 )) ] || { warn "still scheduled after $wait min"; return 0; }
+    echo "  $(date -u +%H:%M:%S) waiting for Kubecost..."; sleep 60
+  done
+}
+
+cmd_run() {
+  need gh
+  local wf ro=false
+  case "${1:-}" in
+    plan) wf=kcresize-plan.yml ;;
+    watch) wf=kcresize-watch.yml ;;
+    *) die "usage: kcctl run plan|watch [--read-only]" ;;
+  esac
+  [ "${2:-}" = "--read-only" ] && ro=true
+  cd "$ROOT"
+  if [ "$wf" = kcresize-plan.yml ]; then gh workflow run "$wf" -f read-only="$ro"; else gh workflow run "$wf"; fi
+  say "started $wf; following it (Ctrl+C stops following, not the run)"
+  sleep 5
+  local id; id="$(gh run list --workflow "$wf" --limit 1 --json databaseId -q '.[0].databaseId')"
+  gh run watch "$id" --exit-status || true
+  gh run view "$id" --log 2>/dev/null | grep -E "proposal|Plan |savings|applied|failed|scheduled|denied|::warning|::error" | tail -20 || true
+}
+
+cmd_teardown() {
+  printf 'Remove the runner, delete repo variables and destroy cluster %s? [y/N] ' "$CLUSTER"; read -r a
+  case "$a" in y|Y) ;; *) echo "cancelled"; return 0 ;; esac
+  "$LAB/setup.sh" runner-remove || warn "runner removal failed"
+  "$LAB/setup.sh" unconfigure || warn "could not delete variables"
+  printf 'y\n' | "$LAB/kc-lab.sh" destroy
+}
+
+cmd_bootstrap() {
+  [ -f "$ENV_FILE" ] || cmd_init
+  load_env
+  "$LAB/kc-lab.sh" up
+  "$LAB/setup.sh" config github
+  printf 'Store notification secrets (SMTP/Slack/Teams/webhook) now? [y/N] '; read -r a
+  case "$a" in y|Y) "$LAB/setup.sh" secrets ;; esac
+  "$LAB/setup.sh" runner doctor
+  ok "bootstrap done."
+  echo "Commit and push .github/kcresize.json, wait a few hours for usage data, then: kcctl run plan --read-only"
+}
+
+usage() { awk 'NR>1 && /^#/{sub(/^# ?/,""); print; next} NR>1{exit}' "$self"; }
+
+# ---------- dispatch
+[ $# -gt 0 ] || { usage; exit 1; }
+cmd="$1"; shift
+case "$cmd" in
+  help|-h|--help) usage; exit 0 ;;
+  version|--version) echo "kcctl $KCCTL_VERSION"; exit 0 ;;
+  completion) cmd_completion "$@"; exit 0 ;;
+  install) cmd_install "$@"; exit 0 ;;
+esac
+load_env
+case "$cmd" in
+  init)        cmd_init "$@" ;;
+  env)         cmd_env ;;
+  bootstrap)   cmd_bootstrap ;;
+  lab)         [ $# -gt 0 ] || die "usage: kcctl lab <step...>"; exec "$LAB/kc-lab.sh" "$@" ;;
+  up|preflight|destroy|runtime|reset|clean|share|unshare)
+               exec "$LAB/kc-lab.sh" "$cmd" "$@" ;;
+  workloads)   exec "$LAB/setup.sh" workloads ;;
+  ui)          cmd_ui ;;
+  setup)       [ $# -gt 0 ] || die "usage: kcctl setup <step...>"; exec "$LAB/setup.sh" "$@" ;;
+  config|secrets|runner)
+               exec "$LAB/setup.sh" "$cmd" ;;
+  doctor)      kcresize doctor "$@" ;;
+  plan|status|show|approve|disapprove|apply|decline)
+               kcresize "$cmd" "$@" ;;
+  watch)       cmd_watch "$@" ;;
+  run)         cmd_run "$@" ;;
+  runs)        need gh; cd "$ROOT" && gh run list --limit 15 ;;
+  issues)      need gh; cd "$ROOT" && gh issue list -l kcresize --limit 50 ;;
+  e2e)         [ -n "${1:-}" ] && export WORKLOAD="$1"; exec "$LAB/e2e-local.sh" ;;
+  teardown)    cmd_teardown ;;
+  *)           die "unknown command '$cmd' (kcctl help)" ;;
+esac
