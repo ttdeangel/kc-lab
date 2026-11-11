@@ -76,7 +76,22 @@ Optional second sign-off: Settings → Environments → `kubecost-actioning` →
 
 To check without GitHub, run `kcctl e2e`. Export the `KCRESIZE_SMTP_*` variables to send real email.
 
-## 4. Reset / tear down
+## 4. Spin down and up
+| Level | Down | Up | Keeps |
+|---|---|---|---|
+| **Pause**: free CPU and RAM | `kcctl pause` | `kcctl resume` (about 2 min, plus up to 10 min for the controller heartbeat) | Everything, including Kubecost history |
+| **Kubecost only** | `kcctl lab uninstall` | `kcctl lab objectstore secrets kubecost expose` | Cluster and workloads |
+| **Full teardown** | `kcctl teardown`, then `colima stop` | `kcctl up` → `kcctl setup github` → `kcctl runner` → `kcctl doctor` | `lab/lab.env`, the signing keys in `.lab/<cluster>/`, the repo and issues |
+
+**What `kcctl pause` does:**
+1. Refuses while a resize is in flight. Use `--force` to pause anyway, or `kcctl watch --wait 90` to wait for it.
+2. Removes the repo variables so the scheduled workflows skip. `--keep-vars` keeps them.
+3. Stops the cluster container.
+4. Stops Colima if no other kind cluster is running. `--keep-colima` keeps it running.
+
+`kcctl resume` reverses all of it, waits for Kubecost, and runs `doctor`. `kcctl env` shows whether the lab is paused.
+
+## 5. Reset / tear down
 ```bash
 kcctl teardown                       # runner + repo variables + this lab's cluster (asks first)
 kubectl --context kind-$CLUSTER apply -f lab/workloads.yaml    # restore the original requests

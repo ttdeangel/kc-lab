@@ -15,6 +15,10 @@
 #                           uninstall destroy share unshare auth signing tools ...
 #   up | preflight | destroy | runtime     shortcuts for the lab steps of the same name (lab status = kcctl lab status)
 #   ui                      open the Kubecost UI in the browser
+#   pause [--force] [--keep-vars] [--keep-colima]
+#                           free CPU/RAM, keep all data: refuses while a resize is in flight, removes the
+#                           repo variables (workflows skip), stops the cluster, stops Colima if unused
+#   resume [--no-vars]      start Colima + cluster, wait for Kubecost, restore repo variables, doctor
 #   workloads               (re)apply the sample workloads (lab/workloads.yaml)
 #
 # GitHub wiring (needs gh, logged in)
@@ -45,7 +49,7 @@
 # Global: KCCTL_ENV=<file> (default lab/lab.env), NO_COLOR=1
 set -euo pipefail
 
-KCCTL_VERSION="1.1.0"
+KCCTL_VERSION="1.2.0"
 
 # ---------- locate the repository (follow symlinks; macOS has no readlink -f)
 self="$0"
@@ -155,6 +159,7 @@ cmd_init() {
 }
 
 cmd_env() {
+  printf '%-18s %s\n' "state" "$([ -f "$WORKDIR/paused" ] && echo "paused since $(cat "$WORKDIR/paused")" || echo "active (or not created)")"
   printf '%-18s %s\n' "repository" "$ROOT" "settings" "$ENV_FILE$([ -f "$ENV_FILE" ] || echo ' (missing: kcctl init)')" \
     "cluster" "$CLUSTER" "kube context" "kind-$CLUSTER" "kubecost" "$KUBECOST_URL" "work dir" "$WORKDIR" \
     "owner" "${OWNER_GITHUB:--} ${OWNER_EMAIL:-}" "actioning" "${ACTIONING_GITHUB:-${OWNER_GITHUB:--}} ${ACTIONING_EMAIL:-}" \
@@ -176,7 +181,7 @@ cmd_install() {
 }
 
 cmd_completion() {
-  local cmds="init bootstrap env install completion lab up preflight status destroy ui workloads setup config secrets runner doctor plan show approve disapprove apply decline watch run runs issues e2e teardown version help"
+  local cmds="init bootstrap env install completion lab up preflight pause resume status destroy ui workloads setup config secrets runner doctor plan show approve disapprove apply decline watch run runs issues e2e teardown version help"
   case "${1:-}" in
     bash) cat <<EOF
 _kcctl() { local cur=\${COMP_WORDS[COMP_CWORD]}; if [ \$COMP_CWORD -eq 1 ]; then COMPREPLY=(\$(compgen -W "$cmds" -- "\$cur")); fi; }
@@ -232,6 +237,76 @@ cmd_run() {
   gh run view "$id" --log 2>/dev/null | grep -E "proposal|Plan |savings|applied|failed|scheduled|denied|::warning|::error" | tail -20 || true
 }
 
+node_container() { echo "${CLUSTER}-control-plane"; }
+
+other_running_clusters() {   # running kind clusters other than this one
+  docker ps --filter label=io.x-k8s.kind.cluster --format '{{.Label "io.x-k8s.kind.cluster"}}' 2>/dev/null \
+    | sort -u | grep -vx "$CLUSTER" || true
+}
+
+inflight() {   # proposals with a Kubecost action in progress (local state, and GitHub issues if gh works)
+  local out=""
+  out="$(kcresize status 2>/dev/null | awk '$2=="scheduled"{print $1}' || true)"
+  if command -v gh >/dev/null 2>&1 && (cd "$ROOT" && gh repo view >/dev/null 2>&1); then
+    out="$out$(cd "$ROOT" && gh issue list -l kcresize:scheduled --json title -q '.[].title' 2>/dev/null | sed 's/^/ /' || true)"
+  fi
+  printf '%s' "$out"
+}
+
+cmd_pause() {
+  local force=0 keep_vars=0 keep_colima=0 busy others
+  while [ $# -gt 0 ]; do
+    case "$1" in --force) force=1 ;; --keep-vars) keep_vars=1 ;; --keep-colima) keep_colima=1 ;; *) die "unknown option $1" ;; esac
+    shift
+  done
+  need docker
+  say "Pausing $CLUSTER"
+  busy="$(inflight)"
+  if [ -n "$busy" ] && [ "$force" = 0 ]; then
+    die "a resize is in flight (Kubecost action scheduled): $busy
+  Wait for it (kcctl watch --wait 90) or pause anyway with --force."
+  fi
+  if [ "$keep_vars" = 0 ] && command -v gh >/dev/null 2>&1 && (cd "$ROOT" && gh repo view >/dev/null 2>&1); then
+    "$LAB/setup.sh" unconfigure || warn "could not delete repo variables"
+  fi
+  if docker inspect "$(node_container)" >/dev/null 2>&1; then
+    docker stop "$(node_container)" >/dev/null && ok "stopped $(node_container) (data kept)"
+  else
+    warn "no container $(node_container); nothing to stop"
+  fi
+  mkdir -p "$WORKDIR" && date -u +%Y-%m-%dT%H:%M:%SZ > "$WORKDIR/paused"
+  others="$(other_running_clusters | tr '\n' ' ')"
+  if [ "$keep_colima" = 1 ] || [ "$(uname)" != Darwin ] || ! command -v colima >/dev/null 2>&1; then
+    :
+  elif [ -n "${others// /}" ]; then
+    echo "Colima left running for: $others"
+  else
+    colima stop --profile "${COLIMA_PROFILE:-default}" && ok "stopped Colima (${COLIMA_PROFILE:-default})"
+  fi
+  ok "paused. Resume with: kcctl resume"
+}
+
+cmd_resume() {
+  local vars=1 i code=""
+  [ "${1:-}" = "--no-vars" ] && vars=0
+  say "Resuming $CLUSTER"
+  "$LAB/kc-lab.sh" runtime
+  printf 'Waiting for Kubecost at %s ' "$KUBECOST_URL"
+  for i in $(seq 1 60); do
+    code="$(curl -s -o /dev/null -w '%{http_code}' "$KUBECOST_URL/model/action/heartbeats/latest" 2>/dev/null || true)"
+    [ "$code" = 200 ] && break
+    printf '.'; sleep 5
+  done
+  echo
+  [ "$code" = 200 ] || warn "Kubecost not answering yet (HTTP ${code:-none}); pods may still be starting: kcctl lab status"
+  if [ "$vars" = 1 ] && command -v gh >/dev/null 2>&1 && (cd "$ROOT" && gh repo view >/dev/null 2>&1); then
+    "$LAB/setup.sh" github >/dev/null && ok "repo variables restored"
+  fi
+  rm -f "$WORKDIR/paused"
+  kcresize doctor || warn "doctor reported problems; the controller heartbeat can take ~10 min after a restart"
+  ok "resumed. UI: $KUBECOST_URL"
+}
+
 cmd_teardown() {
   printf 'Remove the runner, delete repo variables and destroy cluster %s? [y/N] ' "$CLUSTER"; read -r a
   case "$a" in y|Y) ;; *) echo "cancelled"; return 0 ;; esac
@@ -273,6 +348,8 @@ case "$cmd" in
                exec "$LAB/kc-lab.sh" "$cmd" "$@" ;;
   workloads)   exec "$LAB/setup.sh" workloads ;;
   ui)          cmd_ui ;;
+  pause)       cmd_pause "$@" ;;
+  resume)      cmd_resume "$@" ;;
   setup)       [ $# -gt 0 ] || die "usage: kcctl setup <step...>"; exec "$LAB/setup.sh" "$@" ;;
   config|secrets|runner)
                exec "$LAB/setup.sh" "$cmd" ;;

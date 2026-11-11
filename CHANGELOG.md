@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0
+- `kcctl pause` / `kcctl resume`: spin the lab down and up without losing data.
+  - Pause refuses while a resize is in flight, takes the repo variables off so workflows skip, stops the cluster, and stops Colima if unused.
+  - Resume reverses that, waits for Kubecost and runs `doctor`.
+- `kcctl env` shows whether the lab is paused.
+
 ## 1.1.0
 - `kcctl`: one CLI for the lab (`init`, `preflight`, `up`, `destroy`, `ui`, …), GitHub wiring (`config`, `secrets`, `runner`, `doctor`), approvals (`plan`, `approve`, `disapprove`, `apply`, `decline`, `watch --wait`, with `--as` and `--github`), Actions (`run plan|watch`, `runs`, `issues`), `e2e`, `teardown`, `install` and shell completion. Works with macOS bash 3.2.
 - `lab/setup.sh`: new `runner-remove` and `unconfigure` steps.

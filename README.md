@@ -34,7 +34,7 @@ kcctl bootstrap            # lab up + repo config + GitHub vars/environment + ru
 | Area | Commands |
 |---|---|
 | Settings | `init [--yes]`, `env`, `install [DIR]`, `completion bash\|zsh` |
-| Lab (kind + Kubecost) | `preflight`, `up`, `destroy`, `runtime`, `ui`, `workloads`, `lab <any kc-lab.sh step>` (e.g. `lab status`, `lab share`) |
+| Lab (kind + Kubecost) | `preflight`, `up`, `pause`, `resume`, `destroy`, `runtime`, `ui`, `workloads`, `lab <any kc-lab.sh step>` (e.g. `lab status`, `lab share`) |
 | GitHub wiring | `config`, `secrets`, `runner`, `doctor`, `setup <any setup.sh step>` (e.g. `setup runner-remove`) |
 | Approvals, local | `plan [--read-only]`, `status`, `show`, `approve`, `disapprove --reason`, `apply`, `decline`, `watch [--wait MIN]`. Add `--as USER` to act as someone, `--github` to use the repo's issues instead of the local file |
 | Approvals, in Actions | `run plan [--read-only]`, `run watch`, `runs`, `issues` |

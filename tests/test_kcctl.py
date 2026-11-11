@@ -79,3 +79,59 @@ class TestKcctl(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+@unittest.skipUnless(shutil.which("bash"), "bash not available")
+class TestPauseResume(TestKcctl):
+    """pause / resume with stand-in docker, colima and kubectl that record what they were asked to do."""
+
+    def setUp(self):
+        super().setUp()
+        self.bin = os.path.join(self.tmp, "fakebin")
+        self.calls = os.path.join(self.tmp, "calls.log")
+        os.makedirs(self.bin)
+        stub = {
+            "docker": '''case "$1" in
+  ps) exit 0 ;;
+  info) echo "Docker server 0 (stub)" ;;
+  inspect) [ "$2" = "-f" ] && echo false; exit 0 ;;
+esac''',
+            "colima": 'exit 0',
+            "kubectl": 'exit 0',
+            "kind": 'exit 0',
+        }
+        for name, body in stub.items():
+            path = os.path.join(self.bin, name)
+            with open(path, "w") as f:
+                f.write(f'#!/bin/sh\necho "{name} $*" >> "{self.calls}"\n{body}\n')
+            os.chmod(path, 0o755)
+        # no gh on PATH: repo variables are left alone
+        self.env["PATH"] = self.bin + os.pathsep + "/usr/bin:/bin"
+        self.env.pop("KUBECOST_CLUSTER", None)
+
+    def calls_log(self):
+        return open(self.calls).read() if os.path.exists(self.calls) else ""
+
+    def test_flow(self):   # override parent: only pause/resume here
+        self.kc("init", "--yes")
+        subprocess.run([os.path.join(self.repo, "lab", "setup.sh"), "config"], env=self.env, check=True, capture_output=True)
+        self.kc("plan")
+        self.kc("approve", "tbm-payments/fraud-scorer", "--reason", "ok")
+        mock_kubecost.S.auto_complete = None           # Kubecost has not finished: resize in flight
+        self.kc("apply", "tbm-payments/fraud-scorer", "--as", "ops-alice")
+        p = self.kc("pause", check=False)
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("in flight", p.stderr)
+        self.assertNotIn("docker stop", self.calls_log())
+
+        self.kc("pause", "--force")
+        self.assertIn("docker stop example-cluster-control-plane", self.calls_log())
+        self.assertIn("paused since", self.kc("env").stdout)
+
+        r = self.kc("resume")
+        self.assertIn("docker start example-cluster-control-plane", self.calls_log())
+        self.assertIn("resumed", r.stdout)
+        self.assertIn("active", self.kc("env").stdout)
+
+    def test_misc(self):
+        pass
