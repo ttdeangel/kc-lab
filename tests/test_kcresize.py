@@ -295,21 +295,27 @@ class TestGateway(Base):
         import hashlib, hmac, socket, subprocess, time, urllib.parse, urllib.request, urllib.error
         s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
         env = dict(os.environ, GITHUB_REPOSITORY="acme/platform-finops", GITHUB_TOKEN="t", GATEWAY_PORT=str(port),
-                   GITHUB_API_URL=f"http://127.0.0.1:{self.gh_srv.server_port}", SLACK_SIGNING_SECRET="slk", GATEWAY_SECRET="hm")
+                   GITHUB_API_URL=f"http://127.0.0.1:{self.gh_srv.server_port}", SLACK_SIGNING_SECRET="slk", GATEWAY_SECRET="hm",
+                   GATEWAY_HOST="127.0.0.1")
         gw = subprocess.Popen([sys.executable, os.path.join(os.path.dirname(__file__), "..", "gateway", "kcresize-gateway.py")],
                               env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             base = f"http://127.0.0.1:{port}"
-            for _ in range(50):
+            deadline = time.time() + 60          # interpreter start is slow on macOS runners
+            while True:
+                self.assertIsNone(gw.poll(), "gateway exited early")
                 try:
-                    urllib.request.urlopen(base + "/healthz", timeout=1); break
+                    urllib.request.urlopen(base + "/healthz", timeout=2)
+                    break
                 except Exception:
-                    time.sleep(0.1)
+                    if time.time() > deadline:
+                        self.fail("gateway did not start within 60s")
+                    time.sleep(0.25)
 
             def post(path, body, headers):
                 req = urllib.request.Request(base + path, data=body, headers=headers, method="POST")
                 try:
-                    with urllib.request.urlopen(req, timeout=5) as r:
+                    with urllib.request.urlopen(req, timeout=20) as r:
                         return r.status
                 except urllib.error.HTTPError as e:
                     return e.code
@@ -332,7 +338,9 @@ class TestGateway(Base):
             self.assertEqual(post("/webhook", body, {"X-KC-Signature": good}), 202)
             bad = json.dumps({"event": "disapprove", "workload": "a/b", "actor": "x"}).encode()
             self.assertEqual(post("/webhook", bad, {"X-KC-Signature": "sha256=" + hmac.new(b"hm", bad, hashlib.sha256).hexdigest()}), 400)
-            time.sleep(0.5)
+            deadline = time.time() + 20            # Slack clicks are forwarded asynchronously
+            while len(mock_github.G.dispatches) < 2 and time.time() < deadline:
+                time.sleep(0.2)
             d = mock_github.G.dispatches
             self.assertEqual(sorted(x["client_payload"]["event"] for x in d), ["apply", "approve"])   # Slack is async
             self.assertTrue(all(x["event_type"] == "kcresize" for x in d))

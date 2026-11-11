@@ -11,7 +11,7 @@ decided by the kcresize workflows in the repository (config owners / actioning).
 Events forwarded: approve | approve_force | disapprove (owners), apply | decline (actioning team).
 Slack actors are sent as their Slack user ID (list those IDs under owners.<ns>.ids / actioning.ids).
 
-Env: GITHUB_REPOSITORY=org/repo  GITHUB_TOKEN=<token with repo scope (fine-grained: Contents read/write)>
+Env: GATEWAY_HOST=0.0.0.0  GITHUB_REPOSITORY=org/repo  GITHUB_TOKEN=<token with repo scope (fine-grained: Contents read/write)>
      SLACK_SIGNING_SECRET  GATEWAY_SECRET  GATEWAY_TOKEN  GATEWAY_PORT=8088  GITHUB_API_URL
 """
 import hashlib
@@ -33,6 +33,7 @@ SLACK = os.environ.get("SLACK_SIGNING_SECRET", "")
 SECRET = os.environ.get("GATEWAY_SECRET", "")
 GTOKEN = os.environ.get("GATEWAY_TOKEN", "")
 PORT = int(os.environ.get("GATEWAY_PORT", "8088"))
+HOST = os.environ.get("GATEWAY_HOST", "0.0.0.0")
 EVENTS = {"approve", "approve_force", "disapprove", "apply", "decline"}
 SLACK_ACTIONS = {"kc_approve": "approve", "kc_approve_force": "approve_force", "kc_disapprove": "disapprove",
                  "kc_apply": "apply", "kc_decline": "decline"}
@@ -155,4 +156,4 @@ if __name__ == "__main__":
     if not (SLACK or SECRET or GTOKEN):
         sys.exit("Set SLACK_SIGNING_SECRET, GATEWAY_SECRET and/or GATEWAY_TOKEN")
     log(f"kcresize-gateway :{PORT} -> {REPO}  slack={'on' if SLACK else 'off'} hmac={'on' if SECRET else 'off'} token={'on' if GTOKEN else 'off'}")
-    ThreadingHTTPServer(("0.0.0.0", PORT), H).serve_forever()
+    ThreadingHTTPServer((HOST, PORT), H).serve_forever()
