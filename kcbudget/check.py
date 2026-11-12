@@ -5,7 +5,7 @@ crossed.
 Why it exists next to Kubecost's native budget alerts:
   - Microsoft Teams: Office 365 connectors were retired in May 2026, so Teams needs a Workflows URL and
     an Adaptive Card. Kubecost's native Teams post may not render there; this checker sends a card.
-  - Email: native budget emails need SMTP configured inside Kubecost; this uses the repo's SMTP secrets.
+  - Email: native budget emails need SMTP configured inside Kubecost; this uses KCRESIZE_SMTP_* runtime settings on the runner.
   - A status table of every budget in the job summary.
 Pick which channels it delivers with --channels so nothing is sent twice (see docs/budgets.md).
 

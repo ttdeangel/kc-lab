@@ -6,7 +6,8 @@
   - `plan` / `apply [--prune]`: only `kcb-` budgets are managed; UI budgets untouched; `--max-deletes`; webhooks masked.
   - `smoke`: create/read/update/delete a throwaway budget. `doctor`: detects documented vs REST budget paths.
   - `check`: reads budgets from Kubecost, measures period spend (Allocation API), alerts once per threshold per period via Teams Adaptive Cards, email or Slack.
-  - `request`: Microsoft Forms (Power Automate → `repository_dispatch`) → validated pull request.
+  - `request`: Microsoft Forms (Power Automate GitHub connector → `[kcbudget-request]` issue) → validated pull request.
+  - No GitHub secrets: settings load at runtime on the runner (process env, customer `KCBUDGET_SECRETS_COMMAND`, `~/.kcbudget/<env>.env`), allowlisted keys and masked in logs; `preflight` reports presence only. Provider examples for Vault, AWS Secrets Manager, Azure Key Vault and Kubernetes.
 - Reusable workflow `kcbudget-deploy.yml`, with lab, prod (environment-gated), hourly check and request callers.
 - `budgets/lab.json`: 50 example lab budgets (cluster envelope, tripwires, real namespaces, 20-team example org, 3 pools).
 

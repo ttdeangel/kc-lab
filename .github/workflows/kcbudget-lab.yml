@@ -39,4 +39,3 @@ jobs:
       runs-on: ${{ vars.KCRESIZE_RUNS_ON || '"ubuntu-latest"' }}
       setup-python: ${{ vars.KCRESIZE_SETUP_PYTHON != 'false' }}
       tool-repository: ${{ github.repository }}
-    secrets: inherit

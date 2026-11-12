@@ -1,5 +1,5 @@
 {
-  "_comment": "Store this JSON (without _comment) as the KCBUDGET_WEBHOOKS secret of each GitHub Environment (kcbudget-lab, kcbudget-prod). Budget files reference the keys by name. Teams URLs are Workflows URLs ('Post to a channel when a webhook request is received').",
+  "_comment": "Runtime file on the runner, e.g. ~/.kcbudget/kcbudget-lab.webhooks.json (chmod 600), referenced by KCBUDGET_WEBHOOKS_FILE; or return it as KCBUDGET_WEBHOOKS from your KCBUDGET_SECRETS_COMMAND. Never store it in GitHub. Budget files reference the keys by name. Teams URLs are Workflows URLs ('Post to a channel when a webhook request is received').",
   "slack": {
     "finops-alerts": "https://hooks.slack.com/services/T000/B000/XXXX",
     "commerce-alerts": "https://hooks.slack.com/services/T000/B001/XXXX",

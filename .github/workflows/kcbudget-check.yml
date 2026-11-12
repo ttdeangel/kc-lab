@@ -28,4 +28,3 @@ jobs:
       channels: ${{ vars.KCBUDGET_CHANNELS || 'teams' }}
       runs-on: ${{ vars[matrix.runs-on-var] || '"ubuntu-latest"' }}
       tool-repository: ${{ github.repository }}
-    secrets: inherit

@@ -6,19 +6,22 @@
 # Other repositories can call it too:
 #   uses: ttdeangel/kc-lab/.github/workflows/kcbudget-deploy.yml@main
 #
-# Configuration lives in the GitHub Environment named by `environment`:
-#   vars:    KUBECOST_URL (falls back to the repo variable), KUBECOST_UI_URL (optional link in alerts)
-#   secrets: KCBUDGET_WEBHOOKS (JSON, see examples/budgets/webhooks.example.json),
-#            KUBECOST_AUTH_HEADER or KUBECOST_BASIC_USER/_PASSWORD (if Kubecost is behind auth),
-#            KCRESIZE_SMTP_HOST/PORT/USER/PASSWORD/FROM (only for check --channels email)
-# If KUBECOST_URL is empty (e.g. the lab is paused with `kcctl pause`) the job skips with a notice.
+# NO GITHUB SECRETS. Webhook URLs, Kubecost credentials and SMTP settings are loaded at runtime on the
+# runner (see kcbudget/runtime.py), from the first of:
+#   1. the runner's own process environment (runner service env, Kubernetes Secret as env, ...)
+#   2. KCBUDGET_SECRETS_COMMAND: a customer-supplied command that prints them (Vault, AWS, Azure, ...)
+#   3. KCBUDGET_ENV_FILE: default ~/.kcbudget/<environment>.env on the runner (chmod 600)
+# GitHub only carries non-secret configuration, as optional (environment) variables:
+#   KUBECOST_URL, KUBECOST_UI_URL, KCBUDGET_SECRETS_COMMAND, KCBUDGET_ENV_FILE, KCBUDGET_WEBHOOKS_FILE, KCBUDGET_API_STYLE
+# so the job needs a runner that holds those settings: self-hosted for the lab and prod.
+# If no KUBECOST_URL is found (e.g. the lab is paused with `kcctl pause`) the job skips with a notice.
 name: kcbudget - reusable
 
 on:
   workflow_call:
     inputs:
       environment:
-        description: "GitHub Environment holding KUBECOST_URL and secrets (e.g. kcbudget-lab, kcbudget-prod)"
+        description: "GitHub Environment (reviewers, non-secret vars); also selects ~/.kcbudget/<environment>.env on the runner"
         type: string
         required: true
       budgets-file:
@@ -97,18 +100,13 @@ jobs:
       delete: ${{ steps.run.outputs.delete }}
       over: ${{ steps.run.outputs.over }}
     env:
+      # non-secret configuration only; empty values are filled at runtime on the runner
       KUBECOST_URL: ${{ vars.KUBECOST_URL }}
       KUBECOST_UI_URL: ${{ vars.KUBECOST_UI_URL }}
-      KUBECOST_AUTH_HEADER: ${{ secrets.KUBECOST_AUTH_HEADER }}
-      KUBECOST_BASIC_USER: ${{ secrets.KUBECOST_BASIC_USER }}
-      KUBECOST_BASIC_PASSWORD: ${{ secrets.KUBECOST_BASIC_PASSWORD }}
-      KCBUDGET_WEBHOOKS: ${{ secrets.KCBUDGET_WEBHOOKS }}
+      KCBUDGET_SECRETS_COMMAND: ${{ vars.KCBUDGET_SECRETS_COMMAND }}
+      KCBUDGET_ENV_FILE: ${{ vars.KCBUDGET_ENV_FILE }}
+      KCBUDGET_WEBHOOKS_FILE: ${{ vars.KCBUDGET_WEBHOOKS_FILE }}
       KCBUDGET_API_STYLE: ${{ vars.KCBUDGET_API_STYLE }}
-      KCRESIZE_SMTP_HOST: ${{ secrets.KCRESIZE_SMTP_HOST }}
-      KCRESIZE_SMTP_PORT: ${{ secrets.KCRESIZE_SMTP_PORT }}
-      KCRESIZE_SMTP_USER: ${{ secrets.KCRESIZE_SMTP_USER }}
-      KCRESIZE_SMTP_PASSWORD: ${{ secrets.KCRESIZE_SMTP_PASSWORD }}
-      KCRESIZE_SMTP_FROM: ${{ secrets.KCRESIZE_SMTP_FROM }}
       KCBUDGET_ENV: ${{ inputs.environment }}
       KCBUDGET_FILE: ${{ inputs.budgets-file }}
       KCBUDGET_STRICT: ${{ inputs.strict }}
@@ -118,24 +116,16 @@ jobs:
       KCBUDGET_STATE: .kcbudget/check-state.json
       COMMAND: ${{ inputs.command }}
     steps:
-      - name: Check configuration
-        id: cfg
+      - name: Check command
         shell: bash
         run: |
           case "$COMMAND" in validate|doctor|plan|apply|smoke|check) ;; *) echo "::error::unknown command '$COMMAND'"; exit 1;; esac
-          if [ -z "$KUBECOST_URL" ] && [ "$COMMAND" != "validate" ]; then
-            echo "::notice::KUBECOST_URL is not set for '$KCBUDGET_ENV' (lab paused or not connected); skipping."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Check out budgets
-        if: steps.cfg.outputs.ready == 'true'
         uses: actions/checkout@v4
 
       - name: Check out kcbudget tool
-        if: steps.cfg.outputs.ready == 'true' && inputs.tool-repository != github.repository
+        if: inputs.tool-repository != github.repository
         uses: actions/checkout@v4
         with:
           repository: ${{ inputs.tool-repository }}
@@ -143,10 +133,19 @@ jobs:
           path: .kcbudget-tool
 
       - name: Set up Python
-        if: steps.cfg.outputs.ready == 'true' && inputs.setup-python
+        if: inputs.setup-python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Load runtime settings
+        id: cfg
+        shell: bash
+        run: |
+          TOOL="$GITHUB_WORKSPACE"; [ -d .kcbudget-tool/kcbudget ] && TOOL="$GITHUB_WORKSPACE/.kcbudget-tool"
+          echo "PYTHONPATH=$TOOL" >> "$GITHUB_ENV"
+          if [ "$COMMAND" = "validate" ]; then echo "ready=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          PYTHONPATH="$TOOL" "$(command -v python3 || command -v python)" -m kcbudget preflight
 
       - name: Restore check state
         if: steps.cfg.outputs.ready == 'true' && inputs.command == 'check'
@@ -162,8 +161,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TOOL="$GITHUB_WORKSPACE"; [ -d .kcbudget-tool/kcbudget ] && TOOL="$GITHUB_WORKSPACE/.kcbudget-tool"
-          export PYTHONPATH="$TOOL"
           PY="$(command -v python3 || command -v python)"
           if [ -n "$KCBUDGET_FILE" ]; then "$PY" -m kcbudget validate; fi
           [ "$COMMAND" = "validate" ] && exit 0
@@ -172,9 +169,7 @@ jobs:
       - name: Smoke test the Budget API
         if: steps.cfg.outputs.ready == 'true' && inputs.smoke && inputs.command != 'smoke'
         shell: bash
-        run: |
-          TOOL="$GITHUB_WORKSPACE"; [ -d .kcbudget-tool/kcbudget ] && TOOL="$GITHUB_WORKSPACE/.kcbudget-tool"
-          PYTHONPATH="$TOOL" "$(command -v python3 || command -v python)" -m kcbudget smoke
+        run: '"$(command -v python3 || command -v python)" -m kcbudget smoke'
 
       - name: Save check state
         if: always() && steps.cfg.outputs.ready == 'true' && inputs.command == 'check'

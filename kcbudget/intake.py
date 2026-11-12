@@ -45,6 +45,33 @@ def _num(v, what):
         raise spec.SpecError([f"{what} must be a number (got {v!r})"])
 
 
+FENCE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.S)
+ENVIRONMENTS = ("lab", "prod")
+
+
+def payload_from_event(ev):
+    """The form answers from a GitHub event: an issue whose body has a ```json block (created by the
+    Power Automate GitHub connector), or a repository_dispatch client_payload."""
+    if "issue" in ev:
+        m = FENCE.search((ev["issue"] or {}).get("body") or "")
+        if not m:
+            raise spec.SpecError(["the issue body has no ```json block with the form answers"])
+        try:
+            p = json.loads(m.group(1))
+        except json.JSONDecodeError as e:
+            raise spec.SpecError([f"the ```json block is not valid JSON: {e}"])
+        p.setdefault("responseId", f"issue-{ev['issue'].get('number')}")
+        return p
+    return ev.get("client_payload", ev)
+
+
+def target_file(template, payload):
+    env = (payload.get("environment") or "").strip().lower()
+    if env not in ENVIRONMENTS:
+        raise spec.SpecError([f"environment must be one of {', '.join(ENVIRONMENTS)} (got {env!r})"])
+    return template.replace("{environment}", env)
+
+
 def to_budget(doc, p):
     scope_type = (p.get("scopeType") or "namespace").strip().lower()
     if scope_type not in spec.KNOWN_SCOPE_KEYS:
