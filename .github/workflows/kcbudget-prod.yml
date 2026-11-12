@@ -37,7 +37,6 @@ jobs:
       strict: true
       runs-on: ${{ vars.KCBUDGET_PROD_RUNS_ON || '"ubuntu-latest"' }}
       tool-repository: ${{ github.repository }}
-    secrets: inherit
 
   apply:
     needs: plan
@@ -54,4 +53,3 @@ jobs:
       max-deletes: 5
       runs-on: ${{ vars.KCBUDGET_PROD_RUNS_ON || '"ubuntu-latest"' }}
       tool-repository: ${{ github.repository }}
-    secrets: inherit

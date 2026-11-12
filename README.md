@@ -85,7 +85,7 @@ kcctl bootstrap            # lab up + repo config + GitHub vars/environment + ru
 The plan and watch steps also write a summary table to the job summary.
 
 ## Budgets as code (`kcbudget`)
-Teams request budgets through **Microsoft Forms**. Each request becomes a reviewed PR against `budgets/<env>.json`. On merge, a **reusable workflow** syncs the file to the **Kubecost Budget API**, which is the source of truth from then on. Alerts go to each budget's recipients by email, Slack and Microsoft Teams.
+Teams request budgets through **Microsoft Forms**. Each request becomes a reviewed PR against `budgets/<env>.json`. On merge, a **reusable workflow** syncs the file to the **Kubecost Budget API**, which is the source of truth from then on. Alerts go to each budget's recipients by email, Slack and Microsoft Teams. **No secrets are stored in GitHub:** webhook URLs and credentials are loaded at runtime on the runner from its environment, `~/.kcbudget/<env>.env`, or a customer-supplied `KCBUDGET_SECRETS_COMMAND` (Vault, AWS, Azure, Kubernetes examples in `examples/secrets-providers/`).
 
 | Workflow | Trigger | Does |
 |---|---|---|
@@ -93,14 +93,14 @@ Teams request budgets through **Microsoft Forms**. Each request becomes a review
 | `kcbudget-lab.yml` | PR / merge / manual | `budgets/lab.json` (50 example budgets): plan on PR, then apply, prune and smoke test on merge |
 | `kcbudget-prod.yml` | PR / merge / manual | `budgets/prod.json`: plan with read creds, then apply in `kcbudget-prod` (required reviewers), strict |
 | `kcbudget-check.yml` | hourly | Spend vs. limit for every budget in Kubecost, with repo-side Teams/email/Slack alerts once per threshold per period |
-| `kcbudget-request.yml` | `repository_dispatch` | Microsoft Forms → Power Automate → validated pull request |
+| `kcbudget-request.yml` | `[kcbudget-request]` issue | Microsoft Forms → Power Automate GitHub connector (OAuth) → validated pull request |
 
 ```yaml
 jobs:
   budgets:
     uses: ttdeangel/kc-lab/.github/workflows/kcbudget-deploy.yml@main
-    with: {environment: kcbudget-prod, budgets-file: budgets/prod.json, command: apply, strict: true}
-    secrets: inherit
+    with: {environment: kcbudget-prod, budgets-file: budgets/prod.json, command: apply, strict: true,
+           runs-on: '["self-hosted","kcbudget-prod"]'}   # settings load on the runner; no secrets passed
 ```
 Design, file format, setup and the Forms flow are in [docs/budgets.md](docs/budgets.md).
 

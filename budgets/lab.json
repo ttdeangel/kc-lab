@@ -1,5 +1,5 @@
 {
-  "_comment": "Lab budgets (50). Synced to Kubecost by .github/workflows/kcbudget-lab.yml. Slack/Teams entries are channel NAMES resolved from the KCBUDGET_WEBHOOKS secret of the kcbudget-lab environment. Emails are example.com placeholders: replace with real lab recipients.",
+  "_comment": "Lab budgets (50). Synced to Kubecost by .github/workflows/kcbudget-lab.yml. Slack/Teams entries are channel NAMES resolved at runtime on the runner from KCBUDGET_WEBHOOKS (see docs/budgets.md, Runtime settings); no URLs or secrets live in GitHub. Emails are example.com placeholders: replace with real lab recipients.",
   "environment": "lab",
   "managedPrefix": "kcb-",
   "allowedEmailDomains": [

@@ -1,68 +1,80 @@
-# Budget requests from Microsoft Forms.
-# Power Automate posts repository_dispatch {event_type: "kcbudget-request", client_payload: {...form answers}}
-# (see docs/budgets.md and examples/forms/). This workflow validates the request against the target
-# budget file (naming, email domains, channel names, pool headroom) and opens a pull request.
-# Nothing reaches Kubecost until the PR is reviewed and merged.
+# Budget requests from Microsoft Forms, with no keys stored in GitHub.
+#
+# Power Automate (customer-owned): "When a new response is submitted" -> "Get response details" ->
+# GitHub connector "Create an issue" (signs in with OAuth as a bot/service account that is a repo
+# collaborator; no PAT is created or stored in GitHub). Title starts with [kcbudget-request]; the body
+# carries the form answers in a ```json block (examples/forms/power-automate-issue-body.md).
+#
+# This workflow validates the request against budgets/<environment>.json (naming, email domains,
+# channel names, pool headroom) and opens a pull request that closes the issue. It uses only the
+# built-in GITHUB_TOKEN. Nothing reaches Kubecost until the PR is reviewed and merged.
 # Needs: Settings -> Actions -> General -> "Allow GitHub Actions to create and approve pull requests".
 name: kcbudget - request
 
 on:
-  repository_dispatch:
-    types: [kcbudget-request]
+  issues:
+    types: [opened, edited]
 
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
 concurrency:
-  group: kcbudget-request
-  cancel-in-progress: false
+  group: kcbudget-request-${{ github.event.issue.number }}
+  cancel-in-progress: true
 
 jobs:
   request:
+    # only requests filed by people/accounts with write access (the Power Automate connection account)
+    if: >-
+      startsWith(github.event.issue.title, '[kcbudget-request]') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Pick budget file
-        id: target
-        env:
-          TARGET_ENV: ${{ github.event.client_payload.environment }}
-          RESPONSE_ID: ${{ github.event.client_payload.responseId }}
-        run: |
-          case "$TARGET_ENV" in
-            lab|prod) echo "file=budgets/$TARGET_ENV.json" >> "$GITHUB_OUTPUT" ;;
-            *) echo "::error::client_payload.environment must be lab or prod (got '$TARGET_ENV')"; exit 2 ;;
-          esac
-          id="$(printf '%s' "${RESPONSE_ID:-$GITHUB_RUN_ID}" | tr -cd 'A-Za-z0-9-' | cut -c1-40)"
-          echo "branch=kcbudget/request-${TARGET_ENV}-${id:-$GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
       - name: Add the request to the budget file
         id: req
         env:
           PYTHONPATH: ${{ github.workspace }}
-          KCBUDGET_FILE: ${{ steps.target.outputs.file }}
-        run: python -m kcbudget request --payload "$GITHUB_EVENT_PATH" --pr-body "$RUNNER_TEMP/pr-body.md"
+        run: |
+          set -o pipefail
+          python -m kcbudget request --file 'budgets/{environment}.json' --payload "$GITHUB_EVENT_PATH" \
+            --pr-body "$RUNNER_TEMP/pr-body.md" 2>&1 | tee "$RUNNER_TEMP/request.log"
       - name: Open pull request
         env:
           GH_TOKEN: ${{ github.token }}
-          BRANCH: ${{ steps.target.outputs.branch }}
-          FILE: ${{ steps.target.outputs.file }}
+          ISSUE: ${{ github.event.issue.number }}
+          FILE: ${{ steps.req.outputs.file }}
           BUDGET: ${{ steps.req.outputs.budget }}
-          REQUESTER: ${{ github.event.client_payload.requester }}
+          BASE: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          git config user.name "kcbudget-bot"
+          BRANCH="kcbudget/request-$ISSUE"
+          printf '\nCloses #%s\n' "$ISSUE" >> "$RUNNER_TEMP/pr-body.md"
+          git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
           git add "$FILE"
-          git commit -m "budget request: $BUDGET" -m "Requested by ${REQUESTER:-unknown} via Microsoft Forms."
+          git commit -m "budget request: $BUDGET" -m "From Microsoft Forms via issue #$ISSUE."
           git push --force origin "$BRANCH"
-          if gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
+          if url="$(gh pr view "$BRANCH" --json url -q .url 2>/dev/null)"; then
             gh pr edit "$BRANCH" --body-file "$RUNNER_TEMP/pr-body.md"
           else
             gh label create kcbudget-request --color 0E8A16 --description "Budget request from Microsoft Forms" 2>/dev/null || true
-            gh pr create --head "$BRANCH" --base "${{ github.event.repository.default_branch }}" \
-              --title "Budget request: $BUDGET" --body-file "$RUNNER_TEMP/pr-body.md" --label kcbudget-request
+            url="$(gh pr create --head "$BRANCH" --base "$BASE" --title "Budget request: $BUDGET" \
+                   --body-file "$RUNNER_TEMP/pr-body.md" --label kcbudget-request)"
           fi
+          gh issue comment "$ISSUE" --body "Validated. Review and merge to deploy: $url"
+      - name: Report a rejected request
+        if: failure() && steps.req.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          { echo "This request could not be accepted:"; echo; grep '::error::' "$RUNNER_TEMP/request.log" | sed 's/^::error::/- /'; \
+            echo; echo "Edit the issue (or submit the form again) to retry."; } > "$RUNNER_TEMP/reject.md"
+          gh issue comment "$ISSUE" --body-file "$RUNNER_TEMP/reject.md"

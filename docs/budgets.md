@@ -2,9 +2,11 @@
 
 Teams request budgets through **Microsoft Forms**. Each request becomes a reviewed pull request against a budget file. On merge, a **reusable GitHub workflow** syncs the file to the **Kubecost Budget API**, which is the source of truth from then on. Alerts go to each budget's own recipients by **email, Slack and Microsoft Teams**.
 
+**No secrets or keys are stored in GitHub.** Webhook URLs, Kubecost credentials and SMTP settings are loaded at runtime on the runner, from its environment, an env file, or a secrets command the customer supplies ([Runtime settings](#runtime-settings-no-github-secrets)). The Forms flow reaches GitHub through Power Automate's GitHub connector (an OAuth sign-in owned by the customer), not a token kept in GitHub.
+
 ```mermaid
 flowchart LR
-  F[Microsoft Forms<br/>budget request] --> PA[Power Automate<br/>HTTP: repository_dispatch]
+  F[Microsoft Forms<br/>budget request] --> PA[Power Automate<br/>GitHub connector: create issue]
   PA --> RQ[kcbudget-request.yml<br/>validate + open PR]
   RQ --> PR[(Pull request<br/>budgets/lab.json · prod.json)]
   PR -- review + merge --> RW[[kcbudget-deploy.yml<br/>reusable workflow]]
@@ -12,18 +14,23 @@ flowchart LR
   KC -- native budget actions --> N1((Email · Slack · Teams))
   CK[kcbudget-check.yml<br/>hourly] -- read budgets + Allocation spend --> KC
   CK -- channels Kubecost can't reach --> N2((Teams card · email))
+  subgraph Runner["Self-hosted runner (customer)"]
+    RS[runtime settings<br/>process env · secrets command · ~/.kcbudget/env]
+  end
+  RS -. loaded at runtime .-> RW & CK
 ```
 
 ## Components
 | Piece | What it does |
 |---|---|
 | `budgets/<env>.json` | Desired budgets, pools (allocations) and alert recipients. No secrets. |
-| `kcbudget/` | Stdlib-only Python: `validate`, `doctor`, `plan`, `apply`, `smoke`, `check`, `export`, `request`. |
+| `kcbudget/` | Stdlib-only Python: `preflight`, `validate`, `doctor`, `plan`, `apply`, `smoke`, `check`, `export`, `request`. |
+| `kcbudget/runtime.py` | Loads settings at runtime on the runner; the customer carve-out for secrets. |
 | `kcbudget-deploy.yml` | **Reusable workflow** (`workflow_call`). One command in one GitHub Environment. |
 | `kcbudget-lab.yml` | PR → plan. Merge → apply with prune, then smoke test. |
 | `kcbudget-prod.yml` | PR → plan (read creds). Merge → plan, then apply behind required reviewers. |
 | `kcbudget-check.yml` | Hourly. Reads budgets from Kubecost, measures spend, sends repo-side alerts. |
-| `kcbudget-request.yml` | Turns a Microsoft Forms submission into a validated PR. |
+| `kcbudget-request.yml` | Turns a Microsoft Forms submission (a `[kcbudget-request]` issue) into a validated PR, using only the built-in `GITHUB_TOKEN`. |
 
 ## Budget file
 ```json
@@ -52,7 +59,7 @@ flowchart LR
 | `values` | Kubecost scope: `namespace` and/or `cluster` lists. Other keys pass through with a warning. |
 | `interval` / `intervalDay` | `monthly` (day 1-28) or `weekly` (0-6, 0 = Sunday). |
 | `alerts[].percentage` | Percent of `spendLimit` that triggers the alert (Kubecost `actions[].percentage`). |
-| `alerts[].slack` / `.teams` | Channel **names** looked up in the `KCBUDGET_WEBHOOKS` secret, so URLs never sit in the repo. |
+| `alerts[].slack` / `.teams` | Channel **names**, resolved at runtime from `KCBUDGET_WEBHOOKS` on the runner, so URLs never sit in GitHub. |
 | `pool` | Allocation check: the monthly equivalent of all budgets in a pool must fit its `monthlyLimit` (weekly × 52/12). |
 | `owner`, `costCenter`, `request` | Metadata for review and reporting; not sent to Kubecost. |
 
@@ -61,7 +68,7 @@ How it maps to the API: each budget becomes `POST /model/budget` with `name, val
 ## Notifications
 | Channel | Native (Kubecost budget actions) | Repo-side (`kcbudget check`) |
 |---|---|---|
-| Email | Needs SMTP configured inside Kubecost | Uses the `KCRESIZE_SMTP_*` secrets |
+| Email | Needs SMTP configured inside Kubecost | Uses `KCRESIZE_SMTP_*` runtime settings on the runner |
 | Slack | Incoming webhook from `slackWebhooks` | Block message to the same webhooks |
 | Teams | `msTeamsWebhooks`. May not render on Workflows URLs, since O365 connectors were retired in May 2026. | Adaptive Card to the same Workflows URLs |
 
@@ -77,22 +84,54 @@ Recipients always come from the budget in Kubecost, so both paths notify the sam
 
 Three pools (`bu-commerce`, `bu-platform`, `bu-data`) are each about 85% allocated, so one large request will fail validation on purpose.
 
+## Runtime settings (no GitHub secrets)
+kcbudget reads every sensitive value when it starts, on the machine that runs it. The first non-empty value wins:
+
+| Order | Source | Who implements it |
+|---|---|---|
+| 1 | The runner's process environment (runner service env, a Kubernetes Secret mounted as env on an ARC runner pod) | Customer |
+| 2 | `KCBUDGET_SECRETS_COMMAND`: a command that prints JSON or `KEY=VALUE` lines. This is the **carve-out** for Vault, AWS Secrets Manager, Azure Key Vault and similar. | Customer ([examples/secrets-providers/](../examples/secrets-providers/README.md)) |
+| 3 | `KCBUDGET_ENV_FILE`. Default: `~/.kcbudget/<github-environment>.env` on the runner (chmod 600). | Customer ([example](../examples/budgets/kcbudget.env.example)) |
+
+| Key | Purpose |
+|---|---|
+| `KUBECOST_URL` | Kubecost API. If it is missing, the job skips with a notice, as it does for a paused lab. |
+| `KUBECOST_AUTH_HEADER` or `KUBECOST_BASIC_USER` / `KUBECOST_BASIC_PASSWORD` | Kubecost behind auth |
+| `KCBUDGET_WEBHOOKS` (JSON) or `KCBUDGET_WEBHOOKS_FILE` (path) | Slack and Teams channel names → URLs ([shape](../examples/budgets/webhooks.example.json)) |
+| `KCRESIZE_SMTP_HOST/PORT/USER/PASSWORD/FROM` | `check --channels email` |
+
+Safeguards:
+- Only `KUBECOST_*`, `KCBUDGET_*` and `KCRESIZE_SMTP_*` keys are accepted, so a provider cannot change `PATH` and similar settings.
+- In Actions, loaded credentials and webhook URLs are masked in the log.
+- `preflight` reports which keys are present, never their values.
+- The env file name follows the GitHub Environment, which keeps read and write credentials apart: `kcbudget-prod-plan.env` is read-only (plan, check), and `kcbudget-prod.env` can write (apply, behind reviewers).
+
+GitHub carries only **non-secret** configuration, as optional (environment) variables: `KUBECOST_URL`, `KUBECOST_UI_URL`, `KCBUDGET_SECRETS_COMMAND` (a path), `KCBUDGET_ENV_FILE`, `KCBUDGET_WEBHOOKS_FILE`, `KCBUDGET_CHANNELS`, `KCBUDGET_API_STYLE` and the runner labels. Because the settings live on the runner, lab and prod need **self-hosted runners**.
+
 ## Setup
-1. **Environments** (Settings → Environments):
-   - `kcbudget-lab`: optional `KUBECOST_URL` (otherwise the repo variable is used); secret `KCBUDGET_WEBHOOKS`.
-   - `kcbudget-prod-plan`: prod `KUBECOST_URL`, read-only Kubecost credentials, `KCBUDGET_WEBHOOKS`. No reviewers.
-   - `kcbudget-prod`: same plus write credentials. **Required reviewers** and branch rule `main`.
-2. **Webhooks secret**: copy [`examples/budgets/webhooks.example.json`](../examples/budgets/webhooks.example.json), put in real Slack and Teams Workflows URLs, and save it as `KCBUDGET_WEBHOOKS` in each environment.
-3. **Runners**: the lab uses `vars.KCRESIZE_RUNS_ON` (the self-hosted lab runner). Prod uses `vars.KCBUDGET_PROD_RUNS_ON`, which needs a runner that can reach the prod Kubecost.
-4. **First run**:
+1. **Runners:** the lab uses the existing self-hosted runner (`vars.KCRESIZE_RUNS_ON`). Prod needs a self-hosted runner that can reach the prod Kubecost; set `vars.KCBUDGET_PROD_RUNS_ON` to its labels.
+2. **Runtime settings on each runner:** pick one source per environment:
+   ```bash
+   mkdir -p ~/.kcbudget && chmod 700 ~/.kcbudget
+   cp examples/budgets/kcbudget.env.example     ~/.kcbudget/kcbudget-lab.env
+   cp examples/budgets/webhooks.example.json    ~/.kcbudget/kcbudget-lab.webhooks.json   # real Slack/Teams URLs
+   chmod 600 ~/.kcbudget/*
+   ```
+   Or set `KCBUDGET_SECRETS_COMMAND` to a provider script ([examples](../examples/secrets-providers/README.md)).
+3. **GitHub Environments** (no secrets in any of them):
+   - `kcbudget-lab`
+   - `kcbudget-prod-plan`: no reviewers.
+   - `kcbudget-prod`: **required reviewers**, deployments only from `main`.
+4. **First run:**
    1. Run **kcbudget - lab** manually with `doctor`. This confirms the Budget API paths on your Kubecost version.
    2. Run it with `plan`, then `apply`.
    3. Run **kcbudget - check** and confirm the tripwire alerts arrive.
-5. **Adopt existing prod budgets** (optional): run `python -m kcbudget export --prefix kcb-` against prod and paste the output into `budgets/prod.json`.
+5. **Adopt existing prod budgets** (optional): run `python -m kcbudget export --prefix kcb-` on the prod runner and paste the output into `budgets/prod.json`.
 
 Locally against the lab:
 ```bash
-export PYTHONPATH=. KUBECOST_URL=http://localhost:9091 KCBUDGET_WEBHOOKS="$(cat webhooks.json)"
+export PYTHONPATH=. KCBUDGET_ENV=kcbudget-lab          # loads ~/.kcbudget/kcbudget-lab.env
+python3 -m kcbudget preflight
 python3 -m kcbudget doctor
 python3 -m kcbudget plan  --file budgets/lab.json
 python3 -m kcbudget apply --file budgets/lab.json --prune
@@ -101,28 +140,27 @@ KCBUDGET_NOTIFY_DRY_RUN=1 python3 -m kcbudget check --channels email,slack,teams
 ```
 
 ## Microsoft Forms intake
+No GitHub token or key is created or stored. The customer owns the Power Automate side.
 1. **Create the form** from [`examples/forms/budget-request-form.md`](../examples/forms/budget-request-form.md). Use choice questions for environment, scope type, interval, thresholds and channels, so answers are always valid names.
-2. **Build the Power Automate flow:**
+2. **Build the Power Automate flow** ([`power-automate-issue-body.md`](../examples/forms/power-automate-issue-body.md)):
    1. Trigger: **When a new response is submitted**.
    2. Action: **Get response details**.
-   3. Action: **HTTP** (premium connector), `POST https://api.github.com/repos/ttdeangel/kc-lab/dispatches`.
-      - Headers: `Authorization: Bearer <fine-grained PAT: this repo, Contents read/write>`, `Accept: application/vnd.github+json`.
-      - Body: [`examples/forms/power-automate-http-body.json`](../examples/forms/power-automate-http-body.json).
-   4. Store the PAT in Azure Key Vault or a secure flow input, not in plain text.
-3. **What happens next:** `kcbudget-request.yml` validates the request against the target file:
+   3. Action: GitHub connector **Create an issue**, titled `[kcbudget-request] <team>`, with the answers in a ` ```json ` block. The connector signs in with OAuth as a bot or service account that has write access.
+3. **What happens next:** `kcbudget-request.yml` runs only for `[kcbudget-request]` issues from `OWNER`, `MEMBER` or `COLLABORATOR` authors. It validates the request against `budgets/<environment>.json`:
    - Naming
    - Email domain allowlist
    - Known channel names
    - Pool headroom
 
-   It then opens a PR labelled `kcbudget-request`. An invalid request fails the run with the reason, and nothing is written.
+   It then opens a PR (`Closes #<issue>`) and links it on the issue. A rejected request gets a comment with the reasons; edit the issue or resubmit the form to retry.
 4. **Approval:** reviewers approve the PR (add `CODEOWNERS` for `budgets/prod.json`). Merging deploys it.
-5. **Without the premium HTTP connector:** have the flow create a GitHub issue with the standard GitHub connector and handle it with a small issue workflow. That path isn't included here.
+5. **Public repository:** issue text is public, so use a private repository for production requests.
 
 ## Guardrails
 - **Validation before any API call:** names, scopes, alert recipients, channel names (not URLs), email domains and pool headroom.
 - **Prune limits:** prune deletes only prefixed budgets. `--max-deletes` caps each run (lab 50, prod 5). Prod prunes only when someone asks for it on a manual run.
-- **Strict mode in prod:** a channel name missing from `KCBUDGET_WEBHOOKS` fails the run. In the lab, it's a warning.
+- **Strict mode in prod:** a channel name missing from the runtime `KCBUDGET_WEBHOOKS` fails the run. In the lab, it's a warning.
+- **No GitHub secrets:** workflows reference no `secrets.*`; the request workflow uses only the built-in `GITHUB_TOKEN`.
 - **No leaked webhooks:** URLs are masked in plans, summaries and `export`.
 - **Smoke test:** create → read → update → delete of a throwaway `kcb-smoke-<run>` budget proves the write path after every lab deploy.
 - **Paused lab:** when `KUBECOST_URL` is empty (`kcctl pause`), every job skips with a notice.

@@ -14,7 +14,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(__file__))
 
 import mock_kubecost  # noqa: E402
-from kcbudget import check, cli, intake, spec, sync  # noqa: E402
+from kcbudget import check, cli, intake, runtime, spec, sync  # noqa: E402
 from kcbudget.api import BudgetAPI  # noqa: E402
 
 LAB = os.path.join(ROOT, "budgets", "lab.json")
@@ -278,6 +278,69 @@ class TestIntake(Base):
         self.assertEqual(len(spec.load(f)["budgets"]), 51)
         self.assertIn("Microsoft Forms (response 17)", open(pr).read())
         self.assertEqual(self.outputs()["budget"], "kcb-search-relevance-ns-search-relevance-prod-monthly")
+
+
+    def test_issue_event_from_power_automate(self):
+        body = "Budget request submitted through Microsoft Forms.\n\n```json\n" + json.dumps(dict(self.FORM, thresholds=["80%", "100%"])) + "\n```\n"
+        ev = {"action": "opened", "issue": {"number": 7, "title": "[kcbudget-request] search", "body": body}}
+        p = intake.payload_from_event(ev)
+        self.assertEqual(intake.target_file("budgets/{environment}.json", p), "budgets/lab.json")
+        b, _, _ = intake.apply_request(self.lab(), p)
+        self.assertEqual([a["percentage"] for a in b["alerts"]], [80, 100])
+        self.assertEqual(b["request"]["responseId"], "17")
+        with self.assertRaises(spec.SpecError):
+            intake.payload_from_event({"issue": {"number": 8, "body": "no json here"}})
+        with self.assertRaises(spec.SpecError):
+            intake.target_file("budgets/{environment}.json", {"environment": "../../etc"})
+
+
+class TestRuntime(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def write(self, name, text, mode=0o600):
+        p = os.path.join(self.tmp, name)
+        with open(p, "w") as f:
+            f.write(text)
+        os.chmod(p, mode)
+        return p
+
+    def test_env_file_command_precedence_and_allowlist(self):
+        wh = self.write("wh.json", json.dumps(WEBHOOKS))
+        envf = self.write("lab.env", "# lab\nexport KUBECOST_URL=http://from-file:9090\nKCRESIZE_SMTP_HOST='smtp.file'\n"
+                                     f"KCBUDGET_WEBHOOKS_FILE={wh}\nPATH=/evil\n")
+        prov = self.write("prov.py", "import json; print(json.dumps({'KUBECOST_URL': 'http://from-command:9090', "
+                                     "'KUBECOST_AUTH_HEADER': 'Authorization: Bearer t0ken', 'LD_PRELOAD': 'x'}))")
+        environ = {"KCBUDGET_ENV_FILE": envf, "KCBUDGET_SECRETS_COMMAND": f"{sys.executable} {prov}", "KCRESIZE_SMTP_HOST": "smtp.process"}
+        report = runtime.load(environ)
+        self.assertEqual(environ["KUBECOST_URL"], "http://from-command:9090")    # command beats file
+        self.assertEqual(environ["KCRESIZE_SMTP_HOST"], "smtp.process")          # process env beats both
+        self.assertEqual(environ["KUBECOST_AUTH_HEADER"], "Authorization: Bearer t0ken")
+        self.assertEqual(json.loads(environ["KCBUDGET_WEBHOOKS"]), WEBHOOKS)
+        self.assertNotIn("PATH", environ)
+        self.assertNotIn("LD_PRELOAD", environ)
+        text = "\n".join(report)
+        self.assertIn("ignored keys", text)
+        self.assertNotIn("t0ken", text)                                           # report never shows values
+        self.assertNotIn("from-command", text)
+
+    def test_loose_permissions_warn_and_failing_command_raises(self):
+        envf = self.write("x.env", "KUBECOST_URL=http://x\n", 0o644)
+        self.assertTrue(any("chmod 600" in r for r in runtime.load({"KCBUDGET_ENV_FILE": envf})))
+        with self.assertRaises(runtime.RuntimeError_):
+            runtime.load({"KCBUDGET_SECRETS_COMMAND": f"{sys.executable} -c \"import sys; sys.exit(3)\""})
+
+    def test_masks_in_actions(self):
+        import contextlib
+        import io
+        envf = self.write("y.env", "KUBECOST_BASIC_PASSWORD=hunter2\n")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            runtime.load({"KCBUDGET_ENV_FILE": envf, "GITHUB_ACTIONS": "true"})
+        self.assertIn("::add-mask::hunter2", buf.getvalue())
 
 
 if __name__ == "__main__":
