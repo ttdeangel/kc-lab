@@ -28,7 +28,8 @@ kc_resolve_ui_port() {
     *) p="$UI_PORT"; src="UI_PORT setting" ;;
   esac
   if [ -z "$p" ]; then
-    p="$(kc_cluster_ui_port)"; [ -n "$p" ] && src="existing cluster ${CLUSTER}"
+    p="$(kc_cluster_ui_port)"
+    case "$p" in ''|*[!0-9]*) p="" ;; *) src="existing cluster ${CLUSTER}" ;; esac
   fi
   if [ -z "$p" ] && [ -s "$saved" ]; then           # skipped if something else took it meanwhile
     p="$(tr -cd '0-9' < "$saved")"

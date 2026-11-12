@@ -128,7 +128,38 @@ GitHub carries only **non-secret** configuration, as optional (environment) vari
    3. Run **kcbudget - check** and confirm the tripwire alerts arrive.
 5. **Adopt existing prod budgets** (optional): run `python -m kcbudget export --prefix kcb-` on the prod runner and paste the output into `budgets/prod.json`.
 
-Locally against the lab:
+### Local end-to-end test (one command)
+`./lab/budget-e2e.sh` (or `kcctl budget-test`) runs every step below against the lab. Each step is checked, prints PASS/FAIL/SKIP, and stops at the first failure, which names its log:
+
+| Step | Passes when |
+|---|---|
+| tools | `python3` and `curl` are installed, plus `docker` for Mailpit |
+| mail | Mailpit is up with an empty inbox, or the SMTP server is reachable |
+| preflight / doctor | `KUBECOST_URL` is found, and the Budget and Allocation APIs respond |
+| validate | The test copy of `budgets/lab.json` has 50 valid budgets |
+| apply / replan | All 50 managed budgets are in Kubecost, then a second plan shows 0 changes |
+| smoke | A throwaway budget can be created, read, updated and deleted |
+| dry-run | Alert emails are written to the outbox and nothing is sent |
+| send | The alerts are sent. Mailpit arrival is confirmed through its API; with real SMTP, you confirm. |
+| dedupe | A second check sends nothing new in the same period |
+| intake | A simulated Forms issue becomes a budget in Kubecost |
+| restore | Kubecost matches `budgets/lab.json` again |
+
+It asks at start-up for:
+- the Kubecost URL (default: the lab's port, normally 9090)
+- the email mode: `mailpit` (local inbox, the default), `smtp` (real mail) or `dry-run`
+- an optional single test recipient
+- whether to force the tripwire budgets to $0.01, run the intake step, and keep the test budgets afterwards
+
+Answers are saved in `.lab/<cluster>/budget-e2e.answers`, except the SMTP password, which is never written to disk. Repeat runs only need `-y`. Every option also has a flag (see `--help`). The run works on a copy of the budget file and never changes the repository.
+
+```bash
+./lab/budget-e2e.sh                     # first run: answer the prompts
+./lab/budget-e2e.sh -y                  # repeat with the same answers
+./lab/budget-e2e.sh -y --mode smtp --to me@corp.com   # real mail (password from KCRESIZE_SMTP_PASSWORD or a prompt)
+```
+
+Manually, step by step:
 ```bash
 export PYTHONPATH=. KCBUDGET_ENV=kcbudget-lab          # loads ~/.kcbudget/kcbudget-lab.env
 python3 -m kcbudget preflight

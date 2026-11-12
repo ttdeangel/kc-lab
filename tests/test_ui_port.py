@@ -80,6 +80,15 @@ class TestUiPort(unittest.TestCase):
         self.assertEqual(out.split("|")[:2], [str(self.base), "http://kubecost.internal:9090"])
         self.assertFalse(os.path.exists(os.path.join(self.tmp, "work", "ui-port")))
 
+    def test_ignores_non_numeric_docker_output(self):
+        shim = os.path.join(self.tmp, "bin")
+        os.makedirs(shim)
+        with open(os.path.join(shim, "docker"), "w") as f:
+            f.write("#!/bin/sh\necho 'Docker version 27 (shim)'\n")
+        os.chmod(os.path.join(shim, "docker"), 0o755)
+        rc, out, _ = self.resolve(PATH=f"{shim}:/usr/bin:/bin")
+        self.assertEqual(out.split("|")[0], str(self.base))
+
     def test_all_taken_and_bad_value(self):
         for p in range(self.base, self.base + 10):
             self.hold(p)
