@@ -9,3 +9,4 @@ basic-auth.env
 .DS_Store
 .lab/
 lab/lab.env
+.kcbudget/

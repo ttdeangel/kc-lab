@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0
+- `kcbudget`: Kubecost budgets as code. Budget files per environment, synced to the Kubecost Budget API (source of truth).
+  - `validate`: names, scopes, alerts, channel names, email domains, pool allocation headroom.
+  - `plan` / `apply [--prune]`: only `kcb-` budgets are managed; UI budgets untouched; `--max-deletes`; webhooks masked.
+  - `smoke`: create/read/update/delete a throwaway budget. `doctor`: detects documented vs REST budget paths.
+  - `check`: reads budgets from Kubecost, measures period spend (Allocation API), alerts once per threshold per period via Teams Adaptive Cards, email or Slack.
+  - `request`: Microsoft Forms (Power Automate → `repository_dispatch`) → validated pull request.
+- Reusable workflow `kcbudget-deploy.yml`, with lab, prod (environment-gated), hourly check and request callers.
+- `budgets/lab.json`: 50 example lab budgets (cluster envelope, tripwires, real namespaces, 20-team example org, 3 pools).
+
 ## 1.2.0
 - `kcctl pause` / `kcctl resume`: spin the lab down and up without losing data.
   - Pause refuses while a resize is in flight, takes the repo variables off so workflows skip, stops the cluster, and stops Colima if unused.

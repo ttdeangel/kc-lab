@@ -1,0 +1,38 @@
+{
+  "_comment": "Production budgets. Changes merge through a pull request, then .github/workflows/kcbudget-prod.yml applies them in the kcbudget-prod environment (required reviewers). Replace the example entries and email domain before the first apply.",
+  "environment": "prod",
+  "managedPrefix": "kcb-",
+  "allowedEmailDomains": ["example.com"],
+  "defaults": {"kind": "soft", "interval": "monthly", "intervalDay": 1},
+  "pools": {
+    "bu-commerce": {"monthlyLimit": 25000, "description": "Commerce business unit - monthly allocation"},
+    "bu-platform": {"monthlyLimit": 18000, "description": "Platform engineering - monthly allocation"}
+  },
+  "budgets": [
+    {
+      "name": "kcb-checkout-ns-checkout-prod-monthly",
+      "owner": "checkout",
+      "costCenter": "CC-1001",
+      "pool": "bu-commerce",
+      "values": {"namespace": ["checkout-prod"]},
+      "spendLimit": 4000,
+      "alerts": [
+        {"percentage": 50, "emails": ["checkout-leads@example.com"]},
+        {"percentage": 80, "emails": ["checkout-leads@example.com"], "slack": ["commerce-alerts"]},
+        {"percentage": 100, "emails": ["checkout-leads@example.com", "finops@example.com"], "slack": ["commerce-alerts", "finops-alerts"], "teams": ["commerce"]}
+      ]
+    },
+    {
+      "name": "kcb-identity-ns-identity-prod-monthly",
+      "owner": "identity",
+      "costCenter": "CC-2001",
+      "pool": "bu-platform",
+      "values": {"namespace": ["identity-prod"]},
+      "spendLimit": 2500,
+      "alerts": [
+        {"percentage": 80, "emails": ["identity-leads@example.com"], "teams": ["platform"]},
+        {"percentage": 100, "emails": ["identity-leads@example.com", "finops@example.com"], "slack": ["finops-alerts"], "teams": ["platform"]}
+      ]
+    }
+  ]
+}
