@@ -23,7 +23,7 @@ jobs:
       - name: Unit + end-to-end tests (mock Kubecost + mock GitHub)
         run: python -m unittest discover -s tests -v
       - name: Byte-compile
-        run: python -m compileall -q kcresize gateway
+        run: python -m compileall -q kcresize kcbudget gateway
 
   action-smoke:
     # Exercise action.yml itself against the mock Kubecost, file state, notifications as dry-run files.
@@ -56,3 +56,22 @@ jobs:
           test -n "${{ steps.apply.outputs.action-id }}"
           python3 -c "import json; s=json.load(open('.kcresize/state.json')); st=s['proposals']['tbm-payments/fraud-scorer']['status']; print(st); assert st=='applied'"
           ls .kcresize/outbox
+
+  budgets-smoke:
+    # kcbudget end to end against the mock Kubecost: validate, apply 50 lab budgets, re-plan (no changes), smoke, check.
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
+      KUBECOST_URL: http://127.0.0.1:9099
+      KCBUDGET_NOTIFY_DRY_RUN: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tests/mock_kubecost.py 9099 &
+      - run: python3 -m kcbudget validate --file budgets/lab.json && python3 -m kcbudget validate --file budgets/prod.json
+      - run: python3 -m kcbudget apply --file budgets/lab.json --prune
+      - name: re-plan shows no changes
+        run: |
+          python3 -m kcbudget plan --file budgets/lab.json | tee plan.txt
+          grep -q "| 0 | 0 | 0 | 50 |" plan.txt
+      - run: python3 -m kcbudget smoke
+      - run: python3 -m kcbudget check --channels email,slack,teams

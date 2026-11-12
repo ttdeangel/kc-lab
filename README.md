@@ -84,6 +84,26 @@ kcctl bootstrap            # lab up + repo config + GitHub vars/environment + ru
 
 The plan and watch steps also write a summary table to the job summary.
 
+## Budgets as code (`kcbudget`)
+Teams request budgets through **Microsoft Forms**. Each request becomes a reviewed PR against `budgets/<env>.json`. On merge, a **reusable workflow** syncs the file to the **Kubecost Budget API**, which is the source of truth from then on. Alerts go to each budget's recipients by email, Slack and Microsoft Teams.
+
+| Workflow | Trigger | Does |
+|---|---|---|
+| `kcbudget-deploy.yml` | `workflow_call` | Reusable: `validate`, `doctor`, `plan`, `apply` (opt. `prune`), `smoke`, `check` in one GitHub Environment |
+| `kcbudget-lab.yml` | PR / merge / manual | `budgets/lab.json` (50 example budgets): plan on PR, then apply, prune and smoke test on merge |
+| `kcbudget-prod.yml` | PR / merge / manual | `budgets/prod.json`: plan with read creds, then apply in `kcbudget-prod` (required reviewers), strict |
+| `kcbudget-check.yml` | hourly | Spend vs. limit for every budget in Kubecost, with repo-side Teams/email/Slack alerts once per threshold per period |
+| `kcbudget-request.yml` | `repository_dispatch` | Microsoft Forms → Power Automate → validated pull request |
+
+```yaml
+jobs:
+  budgets:
+    uses: ttdeangel/kc-lab/.github/workflows/kcbudget-deploy.yml@main
+    with: {environment: kcbudget-prod, budgets-file: budgets/prod.json, command: apply, strict: true}
+    secrets: inherit
+```
+Design, file format, setup and the Forms flow are in [docs/budgets.md](docs/budgets.md).
+
 ## How decisions are made
 | Who | Where | Command |
 |---|---|---|
@@ -157,12 +177,14 @@ KUBECOST_URL=https://demo.kubecost.io KUBECOST_CLUSTER=kc-demo-prod KCRESIZE_NAM
 ## Repository layout
 ```
 kcctl                         CLI for the lab, GitHub wiring and approvals
+kcbudget/                     budgets as code: spec (validate, pools) sync (plan/apply/prune/smoke) check (spend alerts) intake (Forms)
+budgets/                      lab.json (50 lab budgets) · prod.json (production)
 action.yml                    reusable composite Action (entry: python -m kcresize)
 kcresize/                     package: kubecost.py (API client) planner.py (guardrails) workflow.py (state machine)
                               state.py (GitHub issues / file) report.py (renderers) notify.py (email/Slack/Teams/webhook) cli.py
-.github/workflows/            plan · owner decision · actioning (environment-gated) · watch · ci
+.github/workflows/            plan · owner decision · actioning (environment-gated) · watch · ci · kcbudget-* (budgets)
 .github/kcresize.json         this repo's lab config
-examples/                     consumer workflow, config, sample payloads for every channel, Slack app manifest
+examples/                     consumer workflow, config, sample payloads, Slack app manifest, budget webhooks, Forms intake
 gateway/                      Slack/Teams/webhook → repository_dispatch relay (+ Dockerfile, k8s.yaml)
 lab/                          kind + Kubecost lab, sample workloads, setup, local e2e
 docs/                         architecture, notifications, verified Kubecost API notes

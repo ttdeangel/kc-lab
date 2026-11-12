@@ -1,0 +1,184 @@
+# Reusable workflow: Kubecost budgets as code.
+# One job, one GitHub Environment, one command. Lab and production call it with different inputs:
+#   - kcbudget-lab.yml    PR -> plan · merge -> apply --prune + smoke test
+#   - kcbudget-prod.yml   PR -> plan (read creds) · merge -> plan, then apply behind required reviewers
+#   - kcbudget-check.yml  hourly spend check and repo-side notifications
+# Other repositories can call it too:
+#   uses: ttdeangel/kc-lab/.github/workflows/kcbudget-deploy.yml@main
+#
+# Configuration lives in the GitHub Environment named by `environment`:
+#   vars:    KUBECOST_URL (falls back to the repo variable), KUBECOST_UI_URL (optional link in alerts)
+#   secrets: KCBUDGET_WEBHOOKS (JSON, see examples/budgets/webhooks.example.json),
+#            KUBECOST_AUTH_HEADER or KUBECOST_BASIC_USER/_PASSWORD (if Kubecost is behind auth),
+#            KCRESIZE_SMTP_HOST/PORT/USER/PASSWORD/FROM (only for check --channels email)
+# If KUBECOST_URL is empty (e.g. the lab is paused with `kcctl pause`) the job skips with a notice.
+name: kcbudget - reusable
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "GitHub Environment holding KUBECOST_URL and secrets (e.g. kcbudget-lab, kcbudget-prod)"
+        type: string
+        required: true
+      budgets-file:
+        description: "Budget file, e.g. budgets/lab.json"
+        type: string
+        default: ""
+      command:
+        description: "validate | doctor | plan | apply | smoke | check"
+        type: string
+        default: plan
+      prune:
+        description: "Delete managed (prefix) budgets that are no longer in the file"
+        type: boolean
+        default: false
+      strict:
+        description: "Fail if a Slack/Teams channel name has no webhook in KCBUDGET_WEBHOOKS"
+        type: boolean
+        default: false
+      max-deletes:
+        description: "Safety limit for deletions in one run"
+        type: number
+        default: 10
+      smoke:
+        description: "After apply, create/read/update/delete a throwaway budget to prove the API path"
+        type: boolean
+        default: false
+      channels:
+        description: "check only: repo-side delivery, any of email,slack,teams or none"
+        type: string
+        default: teams
+      runs-on:
+        description: 'JSON runner spec, e.g. "ubuntu-latest" or ["self-hosted","kcresize-lab"]'
+        type: string
+        default: '"ubuntu-latest"'
+      setup-python:
+        description: "Install Python with actions/setup-python (false on runners that have python3)"
+        type: boolean
+        default: true
+      tool-repository:
+        description: "Repository that provides the kcbudget package"
+        type: string
+        default: ttdeangel/kc-lab
+      tool-ref:
+        description: "Ref of tool-repository"
+        type: string
+        default: main
+    outputs:
+      changed:
+        description: "true if apply/plan found creates, updates or deletes"
+        value: ${{ jobs.budgets.outputs.changed }}
+      create:
+        value: ${{ jobs.budgets.outputs.create }}
+      update:
+        value: ${{ jobs.budgets.outputs.update }}
+      delete:
+        value: ${{ jobs.budgets.outputs.delete }}
+      over:
+        description: "check: budgets at or over 100%"
+        value: ${{ jobs.budgets.outputs.over }}
+
+permissions:
+  contents: read
+
+jobs:
+  budgets:
+    name: ${{ inputs.command }} (${{ inputs.environment }})
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: kcbudget-${{ inputs.environment }}-${{ inputs.command == 'check' && 'check' || 'sync' }}
+      cancel-in-progress: false
+    outputs:
+      changed: ${{ steps.run.outputs.changed }}
+      create: ${{ steps.run.outputs.create }}
+      update: ${{ steps.run.outputs.update }}
+      delete: ${{ steps.run.outputs.delete }}
+      over: ${{ steps.run.outputs.over }}
+    env:
+      KUBECOST_URL: ${{ vars.KUBECOST_URL }}
+      KUBECOST_UI_URL: ${{ vars.KUBECOST_UI_URL }}
+      KUBECOST_AUTH_HEADER: ${{ secrets.KUBECOST_AUTH_HEADER }}
+      KUBECOST_BASIC_USER: ${{ secrets.KUBECOST_BASIC_USER }}
+      KUBECOST_BASIC_PASSWORD: ${{ secrets.KUBECOST_BASIC_PASSWORD }}
+      KCBUDGET_WEBHOOKS: ${{ secrets.KCBUDGET_WEBHOOKS }}
+      KCBUDGET_API_STYLE: ${{ vars.KCBUDGET_API_STYLE }}
+      KCRESIZE_SMTP_HOST: ${{ secrets.KCRESIZE_SMTP_HOST }}
+      KCRESIZE_SMTP_PORT: ${{ secrets.KCRESIZE_SMTP_PORT }}
+      KCRESIZE_SMTP_USER: ${{ secrets.KCRESIZE_SMTP_USER }}
+      KCRESIZE_SMTP_PASSWORD: ${{ secrets.KCRESIZE_SMTP_PASSWORD }}
+      KCRESIZE_SMTP_FROM: ${{ secrets.KCRESIZE_SMTP_FROM }}
+      KCBUDGET_ENV: ${{ inputs.environment }}
+      KCBUDGET_FILE: ${{ inputs.budgets-file }}
+      KCBUDGET_STRICT: ${{ inputs.strict }}
+      KCBUDGET_PRUNE: ${{ inputs.prune }}
+      KCBUDGET_MAX_DELETES: ${{ inputs.max-deletes }}
+      KCBUDGET_CHANNELS: ${{ inputs.channels }}
+      KCBUDGET_STATE: .kcbudget/check-state.json
+      COMMAND: ${{ inputs.command }}
+    steps:
+      - name: Check configuration
+        id: cfg
+        shell: bash
+        run: |
+          case "$COMMAND" in validate|doctor|plan|apply|smoke|check) ;; *) echo "::error::unknown command '$COMMAND'"; exit 1;; esac
+          if [ -z "$KUBECOST_URL" ] && [ "$COMMAND" != "validate" ]; then
+            echo "::notice::KUBECOST_URL is not set for '$KCBUDGET_ENV' (lab paused or not connected); skipping."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out budgets
+        if: steps.cfg.outputs.ready == 'true'
+        uses: actions/checkout@v4
+
+      - name: Check out kcbudget tool
+        if: steps.cfg.outputs.ready == 'true' && inputs.tool-repository != github.repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.tool-repository }}
+          ref: ${{ inputs.tool-ref }}
+          path: .kcbudget-tool
+
+      - name: Set up Python
+        if: steps.cfg.outputs.ready == 'true' && inputs.setup-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore check state
+        if: steps.cfg.outputs.ready == 'true' && inputs.command == 'check'
+        uses: actions/cache/restore@v4
+        with:
+          path: .kcbudget/check-state.json
+          key: kcbudget-check-${{ inputs.environment }}-${{ github.run_id }}
+          restore-keys: kcbudget-check-${{ inputs.environment }}-
+
+      - name: kcbudget ${{ inputs.command }}
+        id: run
+        if: steps.cfg.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOOL="$GITHUB_WORKSPACE"; [ -d .kcbudget-tool/kcbudget ] && TOOL="$GITHUB_WORKSPACE/.kcbudget-tool"
+          export PYTHONPATH="$TOOL"
+          PY="$(command -v python3 || command -v python)"
+          if [ -n "$KCBUDGET_FILE" ]; then "$PY" -m kcbudget validate; fi
+          [ "$COMMAND" = "validate" ] && exit 0
+          "$PY" -m kcbudget "$COMMAND"
+
+      - name: Smoke test the Budget API
+        if: steps.cfg.outputs.ready == 'true' && inputs.smoke && inputs.command != 'smoke'
+        shell: bash
+        run: |
+          TOOL="$GITHUB_WORKSPACE"; [ -d .kcbudget-tool/kcbudget ] && TOOL="$GITHUB_WORKSPACE/.kcbudget-tool"
+          PYTHONPATH="$TOOL" "$(command -v python3 || command -v python)" -m kcbudget smoke
+
+      - name: Save check state
+        if: always() && steps.cfg.outputs.ready == 'true' && inputs.command == 'check'
+        uses: actions/cache/save@v4
+        with:
+          path: .kcbudget/check-state.json
+          key: kcbudget-check-${{ inputs.environment }}-${{ github.run_id }}
