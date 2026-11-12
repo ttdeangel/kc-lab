@@ -108,3 +108,7 @@ gh issue list -l kcresize -s all       # old issues (close or delete as you like
 | `preflight`: port in use | Another lab or app holds `UI_PORT`; change it in `lab/lab.env` |
 | Scheduled for more than 2h | `curl -s "$KUBECOST_URL/model/actions/runs?window=2d"`. Status `failed` after 6h (`KCRESIZE_ACTION_TIMEOUT_H`). |
 | `/actions/savings` error | Expected for workloads with no cost history before the resize |
+
+## Budget alerts end to end
+`./lab/budget-e2e.sh` (or `kcctl budget-test`) tests kcbudget on this lab with email alerts. It runs 13 checked steps, by default with a local Mailpit inbox at http://localhost:8025. Inputs are asked once and saved, so repeat runs only need `-y`. See [docs/budgets.md](../docs/budgets.md#local-end-to-end-test-one-command).
+
