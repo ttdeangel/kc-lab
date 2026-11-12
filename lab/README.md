@@ -23,7 +23,7 @@ All names come from `lab/lab.env`, which `kcctl init` writes. The defaults keep 
 | Setting | Default | Why |
 |---|---|---|
 | `CLUSTER` | `kcresize-lab` | A different kind cluster and Kubecost clusterId; an existing cluster is never reused |
-| `UI_PORT` / `KUBECOST_URL` | `9091` / `http://localhost:9091` | An existing lab usually holds 9090 |
+| `UI_PORT` / `KUBECOST_URL` | `auto` → `9090` / `http://localhost:9090` | If another instance holds 9090, the next free port up to 9099 is used and remembered in `$WORKDIR/ui-port`. Set a number to pin it. |
 | `WORKDIR` | `./.lab/<cluster>` | Its own signing keys, values, credentials and local state |
 | `COLIMA_PROFILE` | `default` | Shares the running Colima VM |
 | `LEGACY_WORKLOADS` | `0` | Skips resource-hog, which burns about 2 cores |

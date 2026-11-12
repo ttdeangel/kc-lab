@@ -157,7 +157,7 @@ Interactive Slack and Teams buttons go through [`gateway/`](gateway/). It's a sm
 
 ## Command line (local or any CI)
 ```bash
-export PYTHONPATH=. KUBECOST_URL=http://localhost:9091 KUBECOST_CLUSTER=kcresize-lab KCRESIZE_CONFIG=.github/kcresize.json
+export PYTHONPATH=. KUBECOST_URL=http://localhost:9090 KUBECOST_CLUSTER=kcresize-lab KCRESIZE_CONFIG=.github/kcresize.json
 python3 -m kcresize doctor
 KCRESIZE_STATE=file python3 -m kcresize plan
 python3 -m kcresize approve tbm-payments/fraud-scorer --reason "traffic is flat" --actor fraud-lead

@@ -13,7 +13,7 @@
 #   ./lab/setup.sh unconfigure   delete the repo variables (scheduled workflows then skip)
 #   ./lab/setup.sh all           config workloads github runner doctor
 #
-# Why a self-hosted runner: the lab's Kubecost listens on http://localhost:9090 on this machine,
+# Why a self-hosted runner: the lab's Kubecost listens on http://localhost:9090 (or the next free port) on this machine,
 # which GitHub-hosted runners cannot reach. For a real deployment, point KUBECOST_URL at an internal
 # address your runners can reach (or ARC runners inside the cluster) instead.
 set -euo pipefail
@@ -23,8 +23,10 @@ cd "$(dirname "$0")/.."
 
 CLUSTER="${CLUSTER:-kcresize-lab}"
 CTX="${CTX:-kind-$CLUSTER}"
-UI_PORT="${UI_PORT:-9091}"
-KUBECOST_URL="${KUBECOST_URL:-http://localhost:$UI_PORT}"
+WORKDIR="${WORKDIR:-./.lab/$CLUSTER}"
+# shellcheck disable=SC1091
+source lab/ui-port.sh
+kc_resolve_ui_port || exit 1     # sets UI_PORT and KUBECOST_URL (9090 unless another instance holds it)
 RUNNER_LABEL="${RUNNER_LABEL:-$CLUSTER}"
 RUNNER_DIR="${RUNNER_DIR:-$HOME/actions-runner-$CLUSTER}"
 APPROVAL_LABEL="${APPROVAL_LABEL:-kcresize.io/approval=required}"
