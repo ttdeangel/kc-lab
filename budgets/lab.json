@@ -1,0 +1,2192 @@
+{
+  "_comment": "Lab budgets (50). Synced to Kubecost by .github/workflows/kcbudget-lab.yml. Slack/Teams entries are channel NAMES resolved at runtime on the runner from KCBUDGET_WEBHOOKS (see docs/budgets.md, Runtime settings); no URLs or secrets live in GitHub. Emails are example.com placeholders: replace with real lab recipients.",
+  "environment": "lab",
+  "managedPrefix": "kcb-",
+  "allowedEmailDomains": [
+    "example.com"
+  ],
+  "defaults": {
+    "kind": "soft",
+    "interval": "monthly",
+    "intervalDay": 1
+  },
+  "pools": {
+    "bu-commerce": {
+      "monthlyLimit": 1000,
+      "description": "Commerce business unit - monthly allocation"
+    },
+    "bu-platform": {
+      "monthlyLimit": 1000,
+      "description": "Platform engineering - monthly allocation"
+    },
+    "bu-data": {
+      "monthlyLimit": 700,
+      "description": "Data and ML - monthly allocation"
+    }
+  },
+  "budgets": [
+    {
+      "name": "kcb-cl-kcresize-lab-monthly",
+      "owner": "finops",
+      "costCenter": "CC-9000",
+      "values": {
+        "cluster": [
+          "kcresize-lab"
+        ]
+      },
+      "spendLimit": 600,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "finops-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "finops-leads@example.com"
+          ],
+          "slack": [
+            "finops-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "finops-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "finops-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "finops"
+          ]
+        }
+      ],
+      "_note": "Whole-cluster envelope for the lab"
+    },
+    {
+      "name": "kcb-tripwire-tbm-payments-weekly",
+      "owner": "finops",
+      "costCenter": "CC-9001",
+      "values": {
+        "namespace": [
+          "tbm-payments"
+        ]
+      },
+      "spendLimit": 0.5,
+      "alerts": [
+        {
+          "percentage": 100,
+          "emails": [
+            "finops-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "finops-alerts"
+          ],
+          "teams": [
+            "finops"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "_note": "Deliberately tiny limit: exceeds within hours so every notification channel can be tested"
+    },
+    {
+      "name": "kcb-tripwire-shop-prod-weekly",
+      "owner": "finops",
+      "costCenter": "CC-9002",
+      "values": {
+        "namespace": [
+          "shop-prod"
+        ]
+      },
+      "spendLimit": 0.5,
+      "alerts": [
+        {
+          "percentage": 100,
+          "emails": [
+            "finops-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "finops-alerts"
+          ],
+          "teams": [
+            "finops"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "_note": "Deliberately tiny limit: exceeds within hours so every notification channel can be tested"
+    },
+    {
+      "name": "kcb-tripwire-kubecost-weekly",
+      "owner": "finops",
+      "costCenter": "CC-9003",
+      "values": {
+        "namespace": [
+          "kubecost"
+        ]
+      },
+      "spendLimit": 1,
+      "alerts": [
+        {
+          "percentage": 100,
+          "emails": [
+            "finops-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "finops-alerts"
+          ],
+          "teams": [
+            "finops"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "_note": "Deliberately tiny limit: exceeds within hours so every notification channel can be tested"
+    },
+    {
+      "name": "kcb-fraud-ns-tbm-payments-monthly",
+      "owner": "fraud",
+      "costCenter": "CC-1004",
+      "values": {
+        "namespace": [
+          "tbm-payments"
+        ]
+      },
+      "spendLimit": 25,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "fraud-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "fraud-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "fraud-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "pool": "bu-commerce"
+    },
+    {
+      "name": "kcb-shop-ns-shop-prod-monthly",
+      "owner": "shop",
+      "costCenter": "CC-1005",
+      "values": {
+        "namespace": [
+          "shop-prod"
+        ]
+      },
+      "spendLimit": 25,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "shop-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "shop-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "shop-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "pool": "bu-commerce"
+    },
+    {
+      "name": "kcb-shop-ns-shop-dev-weekly",
+      "owner": "shop",
+      "costCenter": "CC-1006",
+      "values": {
+        "namespace": [
+          "shop-dev"
+        ]
+      },
+      "spendLimit": 3,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "shop-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "shop-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "shop-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-commerce"
+    },
+    {
+      "name": "kcb-shop-ns-all-monthly",
+      "owner": "shop",
+      "costCenter": "CC-1007",
+      "values": {
+        "namespace": [
+          "shop-prod",
+          "shop-dev"
+        ]
+      },
+      "spendLimit": 40,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "shop-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "shop-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "shop-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "_note": "Roll-up across both shop namespaces (not in a pool, to avoid double-counting)"
+    },
+    {
+      "name": "kcb-platform-ns-kubecost-monthly",
+      "owner": "platform",
+      "costCenter": "CC-2008",
+      "values": {
+        "namespace": [
+          "kubecost"
+        ]
+      },
+      "spendLimit": 40,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "platform-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "platform-leads@example.com"
+          ],
+          "slack": [
+            "platform-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "platform-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "platform-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "platform"
+          ]
+        }
+      ],
+      "pool": "bu-platform"
+    },
+    {
+      "name": "kcb-platform-ns-kube-system-monthly",
+      "owner": "platform",
+      "costCenter": "CC-2009",
+      "values": {
+        "namespace": [
+          "kube-system"
+        ]
+      },
+      "spendLimit": 15,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "platform-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "platform-leads@example.com"
+          ],
+          "slack": [
+            "platform-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "platform-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "platform-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "platform"
+          ]
+        }
+      ],
+      "pool": "bu-platform"
+    },
+    {
+      "name": "kcb-checkout-ns-checkout-prod-monthly",
+      "owner": "checkout",
+      "costCenter": "CC-1010",
+      "values": {
+        "namespace": [
+          "checkout-prod"
+        ]
+      },
+      "spendLimit": 60,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "checkout-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "checkout-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "checkout-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "pool": "bu-commerce"
+    },
+    {
+      "name": "kcb-checkout-ns-checkout-dev-weekly",
+      "owner": "checkout",
+      "costCenter": "CC-1011",
+      "values": {
+        "namespace": [
+          "checkout-dev"
+        ]
+      },
+      "spendLimit": 5.0,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "checkout-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "checkout-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "checkout-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-commerce"
+    },
+    {
+      "name": "kcb-cart-ns-cart-prod-monthly",
+      "owner": "cart",
+      "costCenter": "CC-1012",
+      "values": {
+        "namespace": [
+          "cart-prod"
+        ]
+      },
+      "spendLimit": 80,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "cart-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "cart-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "cart-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "pool": "bu-commerce"
+    },
+    {
+      "name": "kcb-cart-ns-cart-dev-weekly",
+      "owner": "cart",
+      "costCenter": "CC-1013",
+      "values": {
+        "namespace": [
+          "cart-dev"
+        ]
+      },
+      "spendLimit": 6.67,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "cart-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "cart-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "cart-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-commerce"
+    },
+    {
+      "name": "kcb-catalog-ns-catalog-prod-monthly",
+      "owner": "catalog",
+      "costCenter": "CC-1014",
+      "values": {
+        "namespace": [
+          "catalog-prod"
+        ]
+      },
+      "spendLimit": 120,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "catalog-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "catalog-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "catalog-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "interval": "monthly",
+      "intervalDay": 15,
+      "pool": "bu-commerce"
+    },
+    {
+      "name": "kcb-catalog-ns-catalog-dev-weekly",
+      "owner": "catalog",
+      "costCenter": "CC-1015",
+      "values": {
+        "namespace": [
+          "catalog-dev"
+        ]
+      },
+      "spendLimit": 10.0,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "catalog-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "catalog-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "catalog-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-commerce"
+    },
+    {
+      "name": "kcb-search-ns-search-prod-monthly",
+      "owner": "search",
+      "costCenter": "CC-1016",
+      "values": {
+        "namespace": [
+          "search-prod"
+        ]
+      },
+      "spendLimit": 45,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "search-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "search-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "search-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "pool": "bu-commerce"
+    },
+    {
+      "name": "kcb-search-ns-search-dev-weekly",
+      "owner": "search",
+      "costCenter": "CC-1017",
+      "values": {
+        "namespace": [
+          "search-dev"
+        ]
+      },
+      "spendLimit": 3.75,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "search-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "search-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "search-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-commerce"
+    },
+    {
+      "name": "kcb-pricing-ns-pricing-prod-monthly",
+      "owner": "pricing",
+      "costCenter": "CC-1018",
+      "values": {
+        "namespace": [
+          "pricing-prod"
+        ]
+      },
+      "spendLimit": 90,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "pricing-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "pricing-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "pricing-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "pool": "bu-commerce"
+    },
+    {
+      "name": "kcb-pricing-ns-pricing-dev-weekly",
+      "owner": "pricing",
+      "costCenter": "CC-1019",
+      "values": {
+        "namespace": [
+          "pricing-dev"
+        ]
+      },
+      "spendLimit": 7.5,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "pricing-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "pricing-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "pricing-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-commerce"
+    },
+    {
+      "name": "kcb-promotions-ns-promotions-prod-monthly",
+      "owner": "promotions",
+      "costCenter": "CC-1020",
+      "values": {
+        "namespace": [
+          "promotions-prod"
+        ]
+      },
+      "spendLimit": 35,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "promotions-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "promotions-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "promotions-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "interval": "monthly",
+      "intervalDay": 15,
+      "pool": "bu-commerce"
+    },
+    {
+      "name": "kcb-promotions-ns-promotions-dev-weekly",
+      "owner": "promotions",
+      "costCenter": "CC-1021",
+      "values": {
+        "namespace": [
+          "promotions-dev"
+        ]
+      },
+      "spendLimit": 2.92,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "promotions-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "promotions-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "promotions-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-commerce"
+    },
+    {
+      "name": "kcb-orders-ns-orders-prod-monthly",
+      "owner": "orders",
+      "costCenter": "CC-1022",
+      "values": {
+        "namespace": [
+          "orders-prod"
+        ]
+      },
+      "spendLimit": 150,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "orders-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "orders-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "orders-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "pool": "bu-commerce"
+    },
+    {
+      "name": "kcb-orders-ns-orders-dev-weekly",
+      "owner": "orders",
+      "costCenter": "CC-1023",
+      "values": {
+        "namespace": [
+          "orders-dev"
+        ]
+      },
+      "spendLimit": 12.5,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "orders-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "orders-leads@example.com"
+          ],
+          "slack": [
+            "commerce-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "orders-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "commerce-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "commerce"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-commerce"
+    },
+    {
+      "name": "kcb-identity-ns-identity-prod-monthly",
+      "owner": "identity",
+      "costCenter": "CC-2024",
+      "values": {
+        "namespace": [
+          "identity-prod"
+        ]
+      },
+      "spendLimit": 60,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "identity-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "identity-leads@example.com"
+          ],
+          "slack": [
+            "platform-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "identity-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "platform-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "platform"
+          ]
+        }
+      ],
+      "pool": "bu-platform"
+    },
+    {
+      "name": "kcb-identity-ns-identity-dev-weekly",
+      "owner": "identity",
+      "costCenter": "CC-2025",
+      "values": {
+        "namespace": [
+          "identity-dev"
+        ]
+      },
+      "spendLimit": 5.0,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "identity-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "identity-leads@example.com"
+          ],
+          "slack": [
+            "platform-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "identity-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "platform-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "platform"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-platform"
+    },
+    {
+      "name": "kcb-gateway-ns-gateway-prod-monthly",
+      "owner": "gateway",
+      "costCenter": "CC-2026",
+      "values": {
+        "namespace": [
+          "gateway-prod"
+        ]
+      },
+      "spendLimit": 80,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "gateway-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "gateway-leads@example.com"
+          ],
+          "slack": [
+            "platform-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "gateway-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "platform-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "platform"
+          ]
+        }
+      ],
+      "interval": "monthly",
+      "intervalDay": 15,
+      "pool": "bu-platform"
+    },
+    {
+      "name": "kcb-gateway-ns-gateway-dev-weekly",
+      "owner": "gateway",
+      "costCenter": "CC-2027",
+      "values": {
+        "namespace": [
+          "gateway-dev"
+        ]
+      },
+      "spendLimit": 6.67,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "gateway-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "gateway-leads@example.com"
+          ],
+          "slack": [
+            "platform-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "gateway-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "platform-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "platform"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-platform"
+    },
+    {
+      "name": "kcb-notifications-ns-notifications-prod-monthly",
+      "owner": "notifications",
+      "costCenter": "CC-2028",
+      "values": {
+        "namespace": [
+          "notifications-prod"
+        ]
+      },
+      "spendLimit": 120,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "notifications-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "notifications-leads@example.com"
+          ],
+          "slack": [
+            "platform-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "notifications-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "platform-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "platform"
+          ]
+        }
+      ],
+      "pool": "bu-platform"
+    },
+    {
+      "name": "kcb-notifications-ns-notifications-dev-weekly",
+      "owner": "notifications",
+      "costCenter": "CC-2029",
+      "values": {
+        "namespace": [
+          "notifications-dev"
+        ]
+      },
+      "spendLimit": 10.0,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "notifications-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "notifications-leads@example.com"
+          ],
+          "slack": [
+            "platform-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "notifications-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "platform-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "platform"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-platform"
+    },
+    {
+      "name": "kcb-observability-ns-observability-prod-monthly",
+      "owner": "observability",
+      "costCenter": "CC-2030",
+      "values": {
+        "namespace": [
+          "observability-prod"
+        ]
+      },
+      "spendLimit": 45,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "observability-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "observability-leads@example.com"
+          ],
+          "slack": [
+            "platform-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "observability-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "platform-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "platform"
+          ]
+        }
+      ],
+      "pool": "bu-platform"
+    },
+    {
+      "name": "kcb-observability-ns-observability-dev-weekly",
+      "owner": "observability",
+      "costCenter": "CC-2031",
+      "values": {
+        "namespace": [
+          "observability-dev"
+        ]
+      },
+      "spendLimit": 3.75,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "observability-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "observability-leads@example.com"
+          ],
+          "slack": [
+            "platform-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "observability-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "platform-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "platform"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-platform"
+    },
+    {
+      "name": "kcb-ci-runners-ns-ci-runners-prod-monthly",
+      "owner": "ci-runners",
+      "costCenter": "CC-2032",
+      "values": {
+        "namespace": [
+          "ci-runners-prod"
+        ]
+      },
+      "spendLimit": 90,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "ci-runners-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "ci-runners-leads@example.com"
+          ],
+          "slack": [
+            "platform-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "ci-runners-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "platform-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "platform"
+          ]
+        }
+      ],
+      "interval": "monthly",
+      "intervalDay": 15,
+      "pool": "bu-platform"
+    },
+    {
+      "name": "kcb-ci-runners-ns-ci-runners-dev-weekly",
+      "owner": "ci-runners",
+      "costCenter": "CC-2033",
+      "values": {
+        "namespace": [
+          "ci-runners-dev"
+        ]
+      },
+      "spendLimit": 7.5,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "ci-runners-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "ci-runners-leads@example.com"
+          ],
+          "slack": [
+            "platform-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "ci-runners-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "platform-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "platform"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-platform"
+    },
+    {
+      "name": "kcb-service-mesh-ns-service-mesh-prod-monthly",
+      "owner": "service-mesh",
+      "costCenter": "CC-2034",
+      "values": {
+        "namespace": [
+          "service-mesh-prod"
+        ]
+      },
+      "spendLimit": 35,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "service-mesh-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "service-mesh-leads@example.com"
+          ],
+          "slack": [
+            "platform-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "service-mesh-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "platform-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "platform"
+          ]
+        }
+      ],
+      "pool": "bu-platform"
+    },
+    {
+      "name": "kcb-service-mesh-ns-service-mesh-dev-weekly",
+      "owner": "service-mesh",
+      "costCenter": "CC-2035",
+      "values": {
+        "namespace": [
+          "service-mesh-dev"
+        ]
+      },
+      "spendLimit": 2.92,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "service-mesh-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "service-mesh-leads@example.com"
+          ],
+          "slack": [
+            "platform-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "service-mesh-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "platform-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "platform"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-platform"
+    },
+    {
+      "name": "kcb-secrets-ns-secrets-prod-monthly",
+      "owner": "secrets",
+      "costCenter": "CC-2036",
+      "values": {
+        "namespace": [
+          "secrets-prod"
+        ]
+      },
+      "spendLimit": 150,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "secrets-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "secrets-leads@example.com"
+          ],
+          "slack": [
+            "platform-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "secrets-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "platform-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "platform"
+          ]
+        }
+      ],
+      "pool": "bu-platform"
+    },
+    {
+      "name": "kcb-secrets-ns-secrets-dev-weekly",
+      "owner": "secrets",
+      "costCenter": "CC-2037",
+      "values": {
+        "namespace": [
+          "secrets-dev"
+        ]
+      },
+      "spendLimit": 12.5,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "secrets-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "secrets-leads@example.com"
+          ],
+          "slack": [
+            "platform-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "secrets-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "platform-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "platform"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-platform"
+    },
+    {
+      "name": "kcb-analytics-ns-analytics-prod-monthly",
+      "owner": "analytics",
+      "costCenter": "CC-3038",
+      "values": {
+        "namespace": [
+          "analytics-prod"
+        ]
+      },
+      "spendLimit": 60,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "analytics-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "analytics-leads@example.com"
+          ],
+          "slack": [
+            "data-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "analytics-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "data-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "data"
+          ]
+        }
+      ],
+      "interval": "monthly",
+      "intervalDay": 15,
+      "pool": "bu-data"
+    },
+    {
+      "name": "kcb-analytics-ns-analytics-dev-weekly",
+      "owner": "analytics",
+      "costCenter": "CC-3039",
+      "values": {
+        "namespace": [
+          "analytics-dev"
+        ]
+      },
+      "spendLimit": 5.0,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "analytics-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "analytics-leads@example.com"
+          ],
+          "slack": [
+            "data-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "analytics-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "data-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "data"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-data"
+    },
+    {
+      "name": "kcb-ml-training-ns-ml-training-prod-monthly",
+      "owner": "ml-training",
+      "costCenter": "CC-3040",
+      "values": {
+        "namespace": [
+          "ml-training-prod"
+        ]
+      },
+      "spendLimit": 80,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "ml-training-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "ml-training-leads@example.com"
+          ],
+          "slack": [
+            "data-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "ml-training-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "data-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "data"
+          ]
+        }
+      ],
+      "pool": "bu-data"
+    },
+    {
+      "name": "kcb-ml-training-ns-ml-training-dev-weekly",
+      "owner": "ml-training",
+      "costCenter": "CC-3041",
+      "values": {
+        "namespace": [
+          "ml-training-dev"
+        ]
+      },
+      "spendLimit": 6.67,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "ml-training-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "ml-training-leads@example.com"
+          ],
+          "slack": [
+            "data-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "ml-training-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "data-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "data"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-data"
+    },
+    {
+      "name": "kcb-ml-serving-ns-ml-serving-prod-monthly",
+      "owner": "ml-serving",
+      "costCenter": "CC-3042",
+      "values": {
+        "namespace": [
+          "ml-serving-prod"
+        ]
+      },
+      "spendLimit": 120,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "ml-serving-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "ml-serving-leads@example.com"
+          ],
+          "slack": [
+            "data-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "ml-serving-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "data-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "data"
+          ]
+        }
+      ],
+      "pool": "bu-data"
+    },
+    {
+      "name": "kcb-ml-serving-ns-ml-serving-dev-weekly",
+      "owner": "ml-serving",
+      "costCenter": "CC-3043",
+      "values": {
+        "namespace": [
+          "ml-serving-dev"
+        ]
+      },
+      "spendLimit": 10.0,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "ml-serving-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "ml-serving-leads@example.com"
+          ],
+          "slack": [
+            "data-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "ml-serving-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "data-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "data"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-data"
+    },
+    {
+      "name": "kcb-etl-ns-etl-prod-monthly",
+      "owner": "etl",
+      "costCenter": "CC-3044",
+      "values": {
+        "namespace": [
+          "etl-prod"
+        ]
+      },
+      "spendLimit": 45,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "etl-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "etl-leads@example.com"
+          ],
+          "slack": [
+            "data-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "etl-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "data-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "data"
+          ]
+        }
+      ],
+      "interval": "monthly",
+      "intervalDay": 15,
+      "pool": "bu-data"
+    },
+    {
+      "name": "kcb-etl-ns-etl-dev-weekly",
+      "owner": "etl",
+      "costCenter": "CC-3045",
+      "values": {
+        "namespace": [
+          "etl-dev"
+        ]
+      },
+      "spendLimit": 3.75,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "etl-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "etl-leads@example.com"
+          ],
+          "slack": [
+            "data-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "etl-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "data-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "data"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-data"
+    },
+    {
+      "name": "kcb-warehouse-ns-warehouse-prod-monthly",
+      "owner": "warehouse",
+      "costCenter": "CC-3046",
+      "values": {
+        "namespace": [
+          "warehouse-prod"
+        ]
+      },
+      "spendLimit": 90,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "warehouse-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "warehouse-leads@example.com"
+          ],
+          "slack": [
+            "data-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "warehouse-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "data-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "data"
+          ]
+        }
+      ],
+      "pool": "bu-data"
+    },
+    {
+      "name": "kcb-warehouse-ns-warehouse-dev-weekly",
+      "owner": "warehouse",
+      "costCenter": "CC-3047",
+      "values": {
+        "namespace": [
+          "warehouse-dev"
+        ]
+      },
+      "spendLimit": 7.5,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "warehouse-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "warehouse-leads@example.com"
+          ],
+          "slack": [
+            "data-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "warehouse-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "data-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "data"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-data"
+    },
+    {
+      "name": "kcb-streaming-ns-streaming-prod-monthly",
+      "owner": "streaming",
+      "costCenter": "CC-3048",
+      "values": {
+        "namespace": [
+          "streaming-prod"
+        ]
+      },
+      "spendLimit": 35,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "streaming-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "streaming-leads@example.com"
+          ],
+          "slack": [
+            "data-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "streaming-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "data-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "data"
+          ]
+        }
+      ],
+      "pool": "bu-data"
+    },
+    {
+      "name": "kcb-streaming-ns-streaming-dev-weekly",
+      "owner": "streaming",
+      "costCenter": "CC-3049",
+      "values": {
+        "namespace": [
+          "streaming-dev"
+        ]
+      },
+      "spendLimit": 2.92,
+      "alerts": [
+        {
+          "percentage": 50,
+          "emails": [
+            "streaming-leads@example.com"
+          ]
+        },
+        {
+          "percentage": 80,
+          "emails": [
+            "streaming-leads@example.com"
+          ],
+          "slack": [
+            "data-alerts"
+          ]
+        },
+        {
+          "percentage": 100,
+          "emails": [
+            "streaming-leads@example.com",
+            "finops@example.com"
+          ],
+          "slack": [
+            "data-alerts",
+            "finops-alerts"
+          ],
+          "teams": [
+            "data"
+          ]
+        }
+      ],
+      "interval": "weekly",
+      "intervalDay": 1,
+      "pool": "bu-data"
+    }
+  ]
+}

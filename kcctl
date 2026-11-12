@@ -20,6 +20,7 @@
 #                           repo variables (workflows skip), stops the cluster, stops Colima if unused
 #   resume [--no-vars]      start Colima + cluster, wait for Kubecost, restore repo variables, doctor
 #   workloads               (re)apply the sample workloads (lab/workloads.yaml)
+#   budget-test [opts]      kcbudget end to end with email alerts, each step checked (lab/budget-e2e.sh --help)
 #
 # GitHub wiring (needs gh, logged in)
 #   setup <step...>         any setup.sh step: config github secrets runner runner-remove unconfigure doctor
@@ -73,10 +74,11 @@ load_env() {
   # shellcheck disable=SC1090
   [ -f "$ENV_FILE" ] && { set -a; . "$ENV_FILE"; set +a; }
   CLUSTER="${CLUSTER:-kcresize-lab}"
-  UI_PORT="${UI_PORT:-9091}"
-  KUBECOST_URL="${KUBECOST_URL:-http://localhost:$UI_PORT}"
   WORKDIR="${WORKDIR:-$ROOT/.lab/$CLUSTER}"
   case "$WORKDIR" in /*) ;; *) WORKDIR="$ROOT/${WORKDIR#./}" ;; esac
+  # shellcheck disable=SC1091
+  . "$LAB/ui-port.sh"
+  UI_NODEPORT=30090 kc_resolve_ui_port || exit 1   # 9090 unless another instance holds it
   export CLUSTER UI_PORT KUBECOST_URL WORKDIR
 }
 
@@ -133,7 +135,10 @@ cmd_init() {
     eval "$var=\$v"
   }
   ask CLUSTER "Cluster name (kind + Kubecost clusterId)" "kcresize-lab"
-  ask UI_PORT "Host port for the Kubecost UI/API" "9091"
+  UI_PORT=auto     # fresh settings: offer auto, not the port resolved for the current lab.env
+  local auto_port; auto_port="$(UI_PORT=auto WORKDIR="$ROOT/.lab/${CLUSTER}" bash -c '. "$1"; kc_resolve_ui_port >/dev/null && echo "$UI_PORT ($KC_UI_PORT_SOURCE)"' _ "$LAB/ui-port.sh" 2>/dev/null || echo 9090)"
+  echo "Kubecost UI/API port: 'auto' = 9090, or the next free port if another instance holds it (now: $auto_port)"
+  ask UI_PORT "Host port for the Kubecost UI/API (number or auto)" "auto"
   ask OWNER_GITHUB "Owner GitHub user(s) (comma list, or @org/team)" "$gh_user"
   ask OWNER_EMAIL "Owner email(s) for approval requests" ""
   ask ACTIONING_GITHUB "Actioning team GitHub user(s)" "$OWNER_GITHUB"
@@ -143,7 +148,7 @@ cmd_init() {
 
   sed -e "s|^CLUSTER=.*|CLUSTER=$CLUSTER|" \
       -e "s|^UI_PORT=.*|UI_PORT=$UI_PORT|" \
-      -e "s|^KUBECOST_URL=.*|KUBECOST_URL=http://localhost:$UI_PORT|" \
+      -e "$( [ "$UI_PORT" = auto ] && echo 's|^KUBECOST_URL=.*|# KUBECOST_URL=  # default http://localhost:<resolved UI_PORT>|' || echo "s|^KUBECOST_URL=.*|KUBECOST_URL=http://localhost:$UI_PORT|" )" \
       -e "s|^WORKDIR=.*|WORKDIR=./.lab/$CLUSTER|" \
       -e "s|^OWNER_GITHUB=.*|OWNER_GITHUB=$OWNER_GITHUB|" \
       -e "s|^OWNER_EMAIL=.*|OWNER_EMAIL=$OWNER_EMAIL|" \
@@ -181,7 +186,7 @@ cmd_install() {
 }
 
 cmd_completion() {
-  local cmds="init bootstrap env install completion lab up preflight pause resume status destroy ui workloads setup config secrets runner doctor plan show approve disapprove apply decline watch run runs issues e2e teardown version help"
+  local cmds="init bootstrap env install completion lab up preflight pause resume status destroy ui workloads budget-test setup config secrets runner doctor plan show approve disapprove apply decline watch run runs issues e2e teardown version help"
   case "${1:-}" in
     bash) cat <<EOF
 _kcctl() { local cur=\${COMP_WORDS[COMP_CWORD]}; if [ \$COMP_CWORD -eq 1 ]; then COMPREPLY=(\$(compgen -W "$cmds" -- "\$cur")); fi; }
@@ -347,6 +352,7 @@ case "$cmd" in
   up|preflight|destroy|runtime|reset|clean|share|unshare)
                exec "$LAB/kc-lab.sh" "$cmd" "$@" ;;
   workloads)   exec "$LAB/setup.sh" workloads ;;
+  budget-test) exec "$LAB/budget-e2e.sh" "$@" ;;
   ui)          cmd_ui ;;
   pause)       cmd_pause "$@" ;;
   resume)      cmd_resume "$@" ;;

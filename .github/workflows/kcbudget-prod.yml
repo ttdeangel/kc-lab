@@ -1,0 +1,55 @@
+# Production budgets: budgets/prod.json -> production Kubecost, through the same reusable workflow.
+#   pull request  -> plan in `kcbudget-prod-plan` (read credentials, no reviewers)
+#   merge to main -> plan, then apply in `kcbudget-prod` (add required reviewers to that environment)
+#   manual        -> plan | apply | smoke | doctor, prune only when asked
+# Strict mode: every Slack/Teams channel named in the file must exist in KCBUDGET_WEBHOOKS.
+name: kcbudget - prod
+
+on:
+  pull_request:
+    paths: ["budgets/prod.json"]
+  push:
+    branches: [main]
+    paths: ["budgets/prod.json"]
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "What to run"
+        type: choice
+        options: [plan, apply, smoke, doctor]
+        default: plan
+      prune:
+        description: "apply: delete kcb-* budgets that are not in the file"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    uses: ./.github/workflows/kcbudget-deploy.yml
+    with:
+      environment: kcbudget-prod-plan
+      budgets-file: budgets/prod.json
+      command: ${{ (github.event_name == 'workflow_dispatch' && inputs.command == 'doctor') && 'doctor' || 'plan' }}
+      prune: ${{ github.event_name == 'workflow_dispatch' && inputs.prune }}
+      strict: true
+      runs-on: ${{ vars.KCBUDGET_PROD_RUNS_ON || '"ubuntu-latest"' }}
+      tool-repository: ${{ github.repository }}
+
+  apply:
+    needs: plan
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && contains(fromJSON('["apply","smoke"]'), inputs.command))
+    uses: ./.github/workflows/kcbudget-deploy.yml
+    with:
+      environment: kcbudget-prod
+      budgets-file: budgets/prod.json
+      command: ${{ (github.event_name == 'workflow_dispatch' && inputs.command == 'smoke') && 'smoke' || 'apply' }}
+      prune: ${{ github.event_name == 'workflow_dispatch' && inputs.prune }}
+      strict: true
+      max-deletes: 5
+      runs-on: ${{ vars.KCBUDGET_PROD_RUNS_ON || '"ubuntu-latest"' }}
+      tool-repository: ${{ github.repository }}
