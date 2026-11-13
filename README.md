@@ -151,15 +151,56 @@ For read-only data testing against the public demo:
 KUBECOST_URL=https://demo.kubecost.io KUBECOST_CLUSTER=kc-demo-prod KCRESIZE_NAMESPACES=kubecost-v3 KCRESIZE_STATE=file python3 -m kcresize plan
 ```
 
-## Lab
-[`lab/`](lab/README.md) (driven by `kcctl`) builds a kind + Kubecost 3.3.1 lab on macOS (Colima) or EC2. Every name (cluster, port, people, runner) comes from `lab/lab.env`, and the defaults run it next to an existing lab without touching it. It adds sample workloads, connects the repo (variables, environment, labels, secrets) and installs a self-hosted runner, then walks through a full end-to-end test table.
+## Lab: spin up, test, spin down
+[`lab/`](lab/README.md) builds a kind + Kubecost 3.3.1 lab on macOS (Colima) or EC2, driven by `kcctl`.
+- **Settings:** every name (cluster, port, people, runner) comes from `lab/lab.env`.
+- **Side by side:** the defaults (cluster `kcresize-lab`, port 9091, work dir `.lab/<cluster>`) run it next to an existing lab without touching it.
+
+**Spin up** (about 15 min, then a few hours of usage data before recommendations appear)
+```bash
+brew install colima docker kind kubectl helm gh jq && gh auth login
+git clone https://github.com/ttdeangel/kc-lab && cd kc-lab
+./kcctl install && kcctl init      # cluster, port, owner + actioning user/email
+kcctl preflight                    # VM CPU / memory / disk, port free, other clusters
+kcctl bootstrap                    # up + config + GitHub vars/environment + runner + doctor
+git add .github/kcresize.json && git commit -m "lab config" && git push
+```
+For a faster first run, set `"window": "6h"` under `kubecost` in `.github/kcresize.json`.
+
+**End-to-end test**
+| # | Do | Expect |
+|---|---|---|
+| 1 | `kcctl run plan --read-only`, then `kcctl run plan` | Summary table, then one issue per workload plus approval emails |
+| 2 | On `tbm-payments/fraud-scorer`: `/disapprove` | "A reason is required" |
+| 3 | `/approve traffic is flat` | `kcresize:approved`, work order to the actioning team |
+| 4 | `/apply` (from the actioning team) | `kcresize:scheduled`, the action shows in Kubecost under Savings → Actions |
+| 5 | Wait about 70 min (`kcresize - watch` runs every 15 min) | `kcresize:applied`, issue closed, the action deleted |
+| 6 | `kubectl --context kind-<cluster> -n tbm-payments get deploy fraud-scorer -o jsonpath='{..requests}'` | `{"cpu":"10m","memory":"20Mi"}` |
+| 7 | On `shop-prod/api`: `/approve`, then `/approve --force` | The first is refused (large production cut), the second goes through |
+
+To check without GitHub, `kcctl e2e` runs plan → approve → apply → wait, using local state.
+
+**Spin down and up**
+| Level | Down | Up | Keeps |
+|---|---|---|---|
+| **Pause** | `kcctl pause` | `kcctl resume` | Everything, including Kubecost history |
+| **Kubecost only** | `kcctl lab uninstall` | `kcctl lab objectstore secrets kubecost expose` | Cluster and workloads |
+| **Full teardown** | `kcctl teardown`, then `colima stop` | `kcctl up` → `kcctl setup github` → `kcctl runner` → `kcctl doctor` | `lab/lab.env`, the signing keys, the repo and issues |
+
+**Pause** refuses while a resize is in flight (`--force` overrides). It also:
+1. Removes the repo variables so the scheduled workflows skip.
+2. Stops the cluster.
+3. Stops Colima if no other kind cluster is running.
+
+`kcctl resume` reverses that and runs `doctor`. For a full teardown, the order is: no resize in flight → `setup unconfigure` → `setup runner-remove` → `destroy` → `colima stop`.
 
 ## Repository layout
 ```
 kcctl                         CLI for the lab, GitHub wiring and approvals
 action.yml                    reusable composite Action (entry: python -m kcresize)
-kcresize/                     package: kubecost.py (API client) planner.py (guardrails) workflow.py (state machine)
-                              state.py (GitHub issues / file) report.py (renderers) notify.py (email/Slack/Teams/webhook) cli.py
+kcresize/                     package: kubecost.py (API client) planner.py (guardrails)
+                              workflow.py (state machine) state.py (GitHub issues / file)
+                              report.py (renderers) notify.py (email/Slack/Teams/webhook) cli.py
 .github/workflows/            plan · owner decision · actioning (environment-gated) · watch · ci
 .github/kcresize.json         this repo's lab config
 examples/                     consumer workflow, config, sample payloads for every channel, Slack app manifest
