@@ -160,7 +160,12 @@ def _run(a):
         result = sync.plan(doc, api, webhooks, prune=a.prune, strict=a.strict)
         for p in result["problems"]:
             print(f"::warning::{p}")
-        applied = sync.apply(result, api, max_deletes=a.max_deletes) if a.command == "apply" else None
+        def progress(i, total, op, name, outcome):
+            print(f"[{i}/{total}] {op} {name}: {outcome}", flush=True)
+        if a.command == "apply":
+            todo = sum(1 for c in result["changes"] if c["op"] in ("create", "update", "delete"))
+            print(f"applying {todo} change(s) to {os.environ.get('KUBECOST_URL')}", flush=True)
+        applied = sync.apply(result, api, max_deletes=a.max_deletes, progress=progress) if a.command == "apply" else None
         _summary(sync.summary_markdown(a.env, result, applied, spec.pool_usage(doc)))
         counts = {op: sum(1 for c in result["changes"] if c["op"] == op) for op in ("create", "update", "delete", "orphan", "noop")}
         _out(**counts, changed=str(any(counts[k] for k in ("create", "update", "delete"))).lower())

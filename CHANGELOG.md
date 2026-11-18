@@ -11,6 +11,8 @@
 - Reusable workflow `kcbudget-deploy.yml`, with lab, prod (environment-gated), hourly check and request callers.
 - Lab UI/API port defaults to **9090**, or the next free port up to 9099 when another instance holds 9090 (`lab/ui-port.sh`, used by kcctl, kc-lab.sh, setup.sh, e2e-local.sh). The choice is remembered per lab in `$WORKDIR/ui-port`; an existing cluster keeps its port; a numeric `UI_PORT` still pins it. `lab.env.example` now has `UI_PORT=auto`.
 - `lab/budget-e2e.sh` / `kcctl budget-test`: one-command kcbudget end to end with email (Mailpit, SMTP or dry-run). It runs 13 checked steps (PASS/FAIL/SKIP, a log per step) and asks for inputs at run time, saving them (never the password) for `-y` reruns. It works on a copy of the budget file and restores Kubecost afterwards.
+- kcbudget `apply` prints each change as it happens (`[i/N] create …`). Budget API calls time out after `KCBUDGET_TIMEOUT` seconds (default 20). A create is sent once; after a timeout or error, kcbudget checks Kubecost for the budget before trying again, so a slow Kubecost never gets duplicates.
+- `budget-e2e.sh` shows live progress on each step (elapsed time and latest line) and the log path up front.
 - `budgets/lab.json`: 50 example lab budgets (cluster envelope, tripwires, real namespaces, 20-team example org, 3 pools).
 
 ## 1.2.0

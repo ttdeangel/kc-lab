@@ -173,6 +173,31 @@ class TestSync(Base):
         self.assertFalse([x for x in log if "FAILED" in x[2]], log)
         self.assertEqual(len(mock_kubecost.S.budgets), 49)
 
+    def test_create_timeout_does_not_duplicate(self):
+        import kcbudget.api as api_mod
+        api = BudgetAPI(self.env["KUBECOST_URL"])
+        real = api._call
+        calls = {"post": 0}
+
+        def flaky(method, path, params=None, body=None, attempts=3):
+            if method == "POST":
+                calls["post"] += 1
+                real(method, path, params, body, attempts)          # Kubecost stores it...
+                raise api_mod.KubecostError("POST /model/budget failed: timed out")   # ...but the reply is lost
+            return real(method, path, params, body, attempts)
+        api._call = flaky
+        body = spec.to_kubecost(self.lab(), self.lab()["budgets"][0], WEBHOOKS)
+        self.assertTrue(api.create(body))
+        self.assertEqual(calls["post"], 1)
+        self.assertEqual(sum(b["name"] == body["name"] for b in mock_kubecost.S.budgets), 1)
+
+    def test_apply_reports_progress(self):
+        seen = []
+        r = sync.plan(self.lab(), self.api, WEBHOOKS)
+        sync.apply(r, self.api, progress=lambda i, t, op, name, out: seen.append((i, t, op)))
+        self.assertEqual(len(seen), 50)
+        self.assertEqual(seen[-1][:2], (50, 50))
+
     def test_smoke(self):
         steps = sync.smoke(self.api, run_id="42")
         self.assertTrue(all(ok for _, ok, _ in steps), steps)

@@ -29,7 +29,7 @@ class Kubecost:
             self.headers["Authorization"] = f"Basic {tok}"
 
     # ---------- transport
-    def _call(self, method, path, params=None, body=None):
+    def _call(self, method, path, params=None, body=None, attempts=3):
         if method != "GET" and self.read_only:
             raise KubecostError(f"read-only mode: refusing {method} {path}")
         q = ("?" + urllib.parse.urlencode(params, safe=",:")) if params else ""
@@ -39,7 +39,7 @@ class Kubecost:
             hdrs["Content-Type"] = "application/json"
         req = urllib.request.Request(self.url + path + q, data=data, headers=hdrs, method=method)
         last = None
-        for attempt in range(3):
+        for attempt in range(attempts):
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout) as r:
                     raw = r.read().decode() or "{}"
@@ -51,7 +51,8 @@ class Kubecost:
                 last = f"HTTP {e.code}: {msg}"
             except (urllib.error.URLError, TimeoutError) as e:
                 last = str(e)
-            time.sleep(2 * (attempt + 1))
+            if attempt + 1 < attempts:
+                time.sleep(2 * (attempt + 1))
         raise KubecostError(f"{method} {path} failed: {last}")
 
     def get(self, path, **params):

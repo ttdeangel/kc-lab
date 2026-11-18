@@ -53,13 +53,15 @@ def plan(doc, api, webhooks, prune=False, strict=False):
     return {"changes": changes, "problems": problems, "remote": len(remote), "unmanaged": sum(1 for r in remote if not (r.get("name") or "").startswith(prefix))}
 
 
-def apply(result, api, max_deletes=None):
-    """Execute a plan. Returns a list of (op, name, outcome)."""
+def apply(result, api, max_deletes=None, progress=None):
+    """Execute a plan. Returns a list of (op, name, outcome). progress(i, total, op, name, outcome) after each change."""
     deletes = [c for c in result["changes"] if c["op"] == "delete"]
     if max_deletes is not None and len(deletes) > max_deletes:
         raise SystemExit(f"refusing to delete {len(deletes)} budgets (max-deletes={max_deletes}); raise the limit if intended")
     log = []
-    for c in result["changes"]:
+    todo = [c for c in result["changes"] if c["op"] in ("create", "update", "delete")]
+    for c in todo:
+        n = len(log)
         try:
             if c["op"] == "create":
                 bid = api.create(c["body"])
@@ -72,6 +74,8 @@ def apply(result, api, max_deletes=None):
                 log.append(("delete", c["name"], "deleted"))
         except Exception as e:      # keep going; the run fails at the end
             log.append((c["op"], c["name"], f"FAILED: {e}"))
+        if progress and len(log) > n:
+            progress(len(log), len(todo), *log[-1])
     return log
 
 

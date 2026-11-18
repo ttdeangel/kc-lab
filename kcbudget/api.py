@@ -26,7 +26,8 @@ def _data(r):
 
 
 class BudgetAPI(Kubecost):
-    def __init__(self, url, read_only=False, timeout=60):
+    def __init__(self, url, read_only=False, timeout=None):
+        timeout = timeout or float(os.environ.get("KCBUDGET_TIMEOUT", "20"))
         super().__init__(url, read_only=read_only, timeout=timeout)
         # "documented" | "rest" | "" (auto)
         self.style = os.environ.get("KCBUDGET_API_STYLE", "").strip().lower()
@@ -51,10 +52,26 @@ class BudgetAPI(Kubecost):
         d = _data(self.get(path)) or []
         return [b for b in d if isinstance(b, dict)]
 
+    def _find(self, name):
+        return [b for b in self.list() if b.get("name") == name]
+
     def create(self, body):
+        """POST once. A create is not idempotent: if the call times out or fails, check whether Kubecost
+        made the budget anyway before trying again, so a slow Kubecost never ends up with duplicates."""
         body = {k: v for k, v in body.items() if k != "id"}
-        r = _data(self._call("POST", "/model/budget", body=body)) or {}
-        return r.get("id") if isinstance(r, dict) else None
+        for attempt in range(2):
+            try:
+                r = _data(self._call("POST", "/model/budget", body=body, attempts=1)) or {}
+                bid = r.get("id") if isinstance(r, dict) else None
+                return bid or ((self._find(body["name"]) or [{}])[0].get("id"))
+            except KubecostError as e:
+                if "HTTP 4" in str(e):
+                    raise
+                found = self._find(body["name"])
+                if found:
+                    return found[0].get("id")
+                if attempt == 1:
+                    raise
 
     def update(self, bid, body):
         body = dict(body, id=bid)

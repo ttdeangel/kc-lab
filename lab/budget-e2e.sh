@@ -34,6 +34,7 @@
 #   --keep                 skip the restore step                  BE_KEEP=1
 #   --continue             keep going after a failed step         BE_CONTINUE=1
 #   --reset                ignore saved answers
+#   Kubecost call timeout: KCBUDGET_TIMEOUT seconds (default 20).
 #   SMTP (mode smtp): BE_SMTP_HOST, BE_SMTP_PORT, BE_SMTP_TLS (starttls|ssl|none), BE_SMTP_USER,
 #                     BE_SMTP_FROM, and the password from KCRESIZE_SMTP_PASSWORD or a hidden prompt.
 # Exit code: 0 all steps passed, 1 a step failed, 2 bad input.
@@ -160,15 +161,31 @@ outbox_emails() { ls "$RUN/outbox" 2>/dev/null | grep -c -- '-email\.json$' || t
 
 # ---------- step runner
 TOTAL=13; NUM=0; PASSED=0; FAILED=0; SKIPPED=0; ROWS=()
-step() {  # step "name" function   -> the function prints its output, sets MSG, returns 0 (pass) / 1 (fail) / 3 (skip)
-  local name="$1" fn="$2" rc log
+step() {  # step "name" function [fg]  -> the function prints its output, sets MSG, returns 0 (pass) / 1 (fail) / 3 (skip)
+  local name="$1" fn="$2" fg="${3:-}" rc log pid el=0 last width
   NUM=$((NUM + 1)); log="$RUN/$(printf '%02d' "$NUM")-$name.log"; MSG=""
-  printf '\n%s[%2d/%d] %s%s\n' "$B" "$NUM" "$TOTAL" "$name" "$N"
-  "$fn" > "$log" 2>&1; rc=$?
+  printf '\n%s[%2d/%d] %s%s  %s(log: %s)%s\n' "$B" "$NUM" "$TOTAL" "$name" "$N" "$D" "${log#"$ROOT"/}" "$N"
+  if [ -n "$fg" ] || [ ! -t 1 ]; then
+    "$fn" > "$log" 2>&1; rc=$?
+  else
+    # run in the background and show progress: elapsed seconds and the latest log line
+    ( "$fn"; r=$?; printf '%s' "$MSG" > "$log.msg"; exit "$r" ) > "$log" 2>&1 &
+    pid=$!
+    width=$(( $(tput cols 2>/dev/null || echo 100) - 16 ))
+    while kill -0 "$pid" 2>/dev/null; do
+      sleep 1; el=$((el + 1))
+      last="$(grep -v '^::\|is not in KCBUDGET_WEBHOOKS\|^[[:space:]]*$' "$log" 2>/dev/null | tail -1 | cut -c1-"$width")"
+      printf '\r\033[K  %s… %3ss%s %s' "$Y" "$el" "$N" "$last"
+    done
+    printf '\r\033[K'
+    wait "$pid"; rc=$?
+    MSG="$(cat "$log.msg" 2>/dev/null)"; rm -f "$log.msg"
+  fi
   local hidden; hidden="$(grep -c 'is not in KCBUDGET_WEBHOOKS' "$log" || true)"
   grep -v '^::add-mask::\|is not in KCBUDGET_WEBHOOKS\|^\*\*Warnings\*\*$' "$log" | grep -v '^[[:space:]]*$' \
     | tail -n "${BE_SHOW_LINES:-12}" | sed "s/^/  ${D}│${N} /"
   [ "${hidden:-0}" -gt 0 ] && printf '  %s│ (%s Slack/Teams "no webhook" warnings hidden: expected in an email-only test)%s\n' "$D" "$hidden" "$N"
+  [ "$el" -gt 0 ] && MSG="$MSG (${el}s)"
   case "$rc" in
     0) PASSED=$((PASSED + 1)); printf '  %sPASS%s %s\n' "$G" "$N" "$MSG"; ROWS+=("PASS|$name|$MSG") ;;
     3) SKIPPED=$((SKIPPED + 1)); printf '  %sSKIP%s %s\n' "$Y" "$N" "$MSG"; ROWS+=("SKIP|$name|$MSG") ;;
@@ -360,7 +377,7 @@ step apply     s_apply
 step replan    s_replan
 step smoke     s_smoke
 step dry-run   s_dryrun
-step send      s_send
+step send      s_send "$([ "$BE_MODE" = smtp ] && [ "$BE_YES" != 1 ] && echo fg)"
 step dedupe    s_dedupe
 step intake    s_intake
 step restore   s_restore
