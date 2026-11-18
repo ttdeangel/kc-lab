@@ -1,0 +1,30 @@
+# Hourly: read every budget FROM KUBECOST, measure this period's spend, and notify each budget's own
+# recipients on the channels Kubecost does not deliver itself (default: Teams via Workflows).
+# Set repo/environment variable KCBUDGET_CHANNELS (e.g. "teams" or "email,teams") to change that.
+name: kcbudget - check
+
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - environment: kcbudget-lab
+            runs-on-var: KCRESIZE_RUNS_ON
+          - environment: kcbudget-prod-plan
+            runs-on-var: KCBUDGET_PROD_RUNS_ON
+    uses: ./.github/workflows/kcbudget-deploy.yml
+    with:
+      environment: ${{ matrix.environment }}
+      command: check
+      channels: ${{ vars.KCBUDGET_CHANNELS || 'teams' }}
+      runs-on: ${{ vars[matrix.runs-on-var] || '"ubuntu-latest"' }}
+      tool-repository: ${{ github.repository }}

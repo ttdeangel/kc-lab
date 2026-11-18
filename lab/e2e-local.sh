@@ -18,7 +18,11 @@ OWNER="${OWNER:-${OWNER_GITHUB:-lab-owner}}"
 ACTIONER="${ACTIONER:-${ACTIONING_GITHUB:-lab-ops}}"
 WAIT_MIN="${WAIT_MIN:-120}"
 export PYTHONPATH=. KCRESIZE_STATE=file KCRESIZE_STATE_FILE="${KCRESIZE_STATE_FILE:-.kcresize/e2e-state.json}"
-export KUBECOST_URL="${KUBECOST_URL:-http://localhost:${UI_PORT:-9091}}" KUBECOST_CLUSTER="${KUBECOST_CLUSTER:-${CLUSTER:-kcresize-lab}}"
+CLUSTER="${CLUSTER:-kcresize-lab}" WORKDIR="${WORKDIR:-./.lab/${CLUSTER:-kcresize-lab}}"
+# shellcheck disable=SC1091
+source lab/ui-port.sh
+kc_resolve_ui_port || exit 1
+export KUBECOST_URL KUBECOST_CLUSTER="${KUBECOST_CLUSTER:-$CLUSTER}"
 NS="${WORKLOAD%%/*}"
 
 # A throwaway config: the chosen namespace, you as owner and as actioning team

@@ -33,3 +33,15 @@ So expect **about 1 to 1.5 hours** from apply to resize.
 - `latestKnownRequest` lags after a resize (still the old value an hour later). It comes from metrics, so don't use it to verify. kcresize verifies with `/actions/completed`.
 - Use `window=2d` or more for runs and completed: `1d` resets at 00:00 UTC.
 - Free tier: Actions are limited to 250 cores. Resource-quota right-sizing was Enterprise-only in 3.1.
+
+## Budget API (Kubecost 3.3.1, lab, verified 2026-11-17 with lab/budget-probe.py)
+- **Type field is `budgetType`** (`allocations | asset | cloud | collections`), not the documented `type`. Without it:
+  `HTTP 500 "error parsing budget action: budget type must be asset, allocations, cloud or collections; got "`.
+  kcbudget sends both `type` and `budgetType`; each build ignores the field it doesn't use.
+- **Create:** `POST /model/budget` stores the budget and then answers `HTTP 400 "failed to validate budget: failed to
+  create budget, duplicate name <name> found"`. kcbudget treats that as success once the budget is listed.
+- **List:** `GET /model/budgets` returns each budget with `budgetType`, `actions[].id/amount/lastFired`, and the current
+  `window` `{start,end}` with `currentSpend`. `kcbudget check` uses `currentSpend` while `now` is inside `window`.
+- **Single budget:** `GET /model/budget` without `id` answers `400 "budget ID is a required parameter"`.
+- **Delete:** not yet confirmed. kcbudget tries `DELETE /model/budget?id=`, then `/model/deleteBudget?id=`, then
+  `/model/budget/{id}`, confirms each one through the list, and remembers the path that works.

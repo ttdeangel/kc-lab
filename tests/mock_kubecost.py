@@ -43,6 +43,14 @@ class State:
             "kubecost": {},
         }
         self.configs, self.completed, self.log = [], [], []
+        # Budget API (documented paths by default; "rest" = /model/budget[/{id}] only)
+        self.budgets, self.budget_style = [], "documented"
+        self.budget_type_field = "budgetType"     # Kubecost 3.3.1; "type" = the documented field
+        # "3.3.1": behaves like the lab's Kubecost 3.3.1 (seen 2026-11-17): create stores the budget and then
+        # answers 400 "duplicate name"; delete is DELETE /model/budget?id=; list adds window + currentSpend.
+        # "docs": the Kubecost 2.x Budget API docs (deleteBudget, plain 200 on create).
+        self.budget_flavor = "3.3.1"
+        self.ns_cost = {"tbm-payments": 3.2, "shop-prod": 1.1, "shop-dev": 0.4, "kubecost": 6.0, "kube-system": 2.5}
         self.auto_complete = "success"     # success | failed | None (never)
         self.lock = threading.Lock()
 
@@ -95,7 +103,24 @@ class H(BaseHTTPRequestHandler):
             return self.send(200, {"code": 200, "data": [
                 {"name": "Development", "algorithmCPU": "max", "algorithmRAM": "max", "targetUtilizationCPU": 0.8, "targetUtilizationRAM": 0.8, "createdBy": "Default"},
                 {"name": "Production", "algorithmCPU": "max", "algorithmRAM": "max", "targetUtilizationCPU": 0.65, "targetUtilizationRAM": 0.65, "createdBy": "Default"}]})
+        if u.path == "/model/budgets" and S.budget_style == "documented":
+            if S.budget_flavor == "3.3.1":
+                out = []
+                for b in S.budgets:
+                    nss = (b.get("values") or {}).get("namespace") or list(S.ns_cost)
+                    out.append(dict({k: v for k, v in b.items() if k != "type"},
+                                    window={"start": "2026-11-16T00:00:00Z", "end": "2026-11-23T00:00:00Z"},
+                                    currentSpend=round(sum(S.ns_cost.get(n, 0) for n in nss), 4)))
+                return self.send(200, {"code": 200, "data": out})
+            return self.send(200, {"code": 200, "data": S.budgets})
+        if u.path == "/model/budget" and S.budget_style == "documented" and S.budget_flavor == "3.3.1":
+            return self.send(400, {"code": 400, "data": None, "message": "budget ID is a required parameter"})
+        if u.path == "/model/budget" and S.budget_style == "rest":
+            return self.send(200, {"code": 200, "data": S.budgets})
         if u.path == "/model/allocation":
+            if q.get("aggregate") == "cluster":
+                nss = re.findall(r'"([^"]+)"', f.split("namespace:", 1)[1].split("+")[0]) if "namespace:" in f else list(S.ns_cost)
+                return self.send(200, {"code": 200, "data": [{CLUSTER: {"name": CLUSTER, "totalCost": round(sum(S.ns_cost.get(n, 0) for n in nss), 4)}}]})
             if q.get("aggregate") == "namespace":
                 return self.send(200, {"code": 200, "data": [{n: {"name": n, "properties": {"namespaceLabels": l}} for n, l in S.ns_labels.items()}]})
             keys = {f'{r["namespace"]}/{r["controllerName"]}' for r in S.recs if f'"{r["namespace"]}"' in f}
@@ -124,11 +149,57 @@ class H(BaseHTTPRequestHandler):
                 if S.auto_complete:
                     S.complete_action(body)
             return self.send(200, {"code": 200, "data": body})
+        if self.path == "/model/budget":
+            field = "budgetType" if S.budget_type_field == "budgetType" else "type"
+            if body.get(field) not in ("asset", "allocations", "cloud", "collections"):
+                return self.send(500, {"code": 500, "data": None, "message": "error parsing budget action: budget type must be "
+                                       f"asset, allocations, cloud or collections; got {body.get(field) or ''}"})
+            with S.lock:
+                if body.get("id"):
+                    if S.budget_style == "rest":
+                        return self.send(400, {"message": "use PUT"})
+                    S.budgets = [body if b["id"] == body["id"] else b for b in S.budgets]
+                else:
+                    if any(b.get("name") == body.get("name") for b in S.budgets):
+                        return self.send(400, {"code": 400, "data": None, "message":
+                                               f"failed to validate budget: failed to create budget, duplicate name {body.get('name')} found"})
+                    body["id"] = str(uuid.uuid4())
+                    S.budgets.append(body)
+                    if S.budget_flavor == "3.3.1":     # stored, but answered as a duplicate (3.3.1 quirk)
+                        return self.send(400, {"code": 400, "data": None, "message":
+                                               f"failed to validate budget: failed to create budget, duplicate name {body.get('name')} found"})
+            return self.send(200, {"code": 200, "data": body})
+        return self.send(404, {})
+
+    def do_PUT(self):
+        n = int(self.headers.get("Content-Length", 0) or 0)
+        body = json.loads(self.rfile.read(n) or b"{}")
+        S.log.append(("PUT", self.path, body))
+        m = re.match(r"^/model/budget/([^/?]+)$", self.path)
+        if m and S.budget_style == "rest":
+            if body.get("type") not in ("asset", "allocations", "cloud", "collections"):
+                return self.send(500, {"code": 500, "data": None, "message": "budget type must be asset, allocations, cloud or collections"})
+            body["id"] = m.group(1)
+            S.budgets = [body if b["id"] == m.group(1) else b for b in S.budgets]
+            return self.send(200, {"code": 200, "data": body})
         return self.send(404, {})
 
     def do_DELETE(self):
         q = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
         S.log.append(("DELETE", urlparse(self.path).path, q))
+        path = urlparse(self.path).path
+        m = re.match(r"^/model/budget/([^/?]+)$", path)
+        if path == "/model/budget" and S.budget_style == "documented" and S.budget_flavor == "3.3.1":
+            S.budgets = [b for b in S.budgets if b["id"] != q.get("id")]
+            return self.send(200, {"code": 200, "data": []})
+        if path == "/model/deleteBudget" and S.budget_flavor == "3.3.1":
+            return self.send(404, {"message": "404 page not found"})
+        if (path == "/model/deleteBudget" and S.budget_style == "documented") or (m and S.budget_style == "rest"):
+            bid = q.get("id") if not m else m.group(1)
+            S.budgets = [b for b in S.budgets if b["id"] != bid]
+            return self.send(200, {"code": 200, "data": []})
+        if path == "/model/deleteBudget":
+            return self.send(404, {"message": "404 page not found"})
         S.configs = [c for c in S.configs if c["id"] != q.get("id")]
         return self.send(200, {"code": 200, "data": None})
 

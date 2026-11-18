@@ -3,7 +3,8 @@
 #
 # Usage:  ./lab/kc-lab.sh <step> [step...]
 # Settings: lab/lab.env (copy lab/lab.env.example). Defaults run this lab NEXT TO an existing one:
-#   cluster kcresize-lab, UI on http://localhost:9091, work dir ./.lab/<cluster>, same Colima VM.
+#   cluster kcresize-lab, UI on http://localhost:9090 (next free port up to 9099 if another instance
+#   holds 9090; see lab/ui-port.sh), work dir ./.lab/<cluster>, same Colima VM.
 #
 #   preflight  check CPU / memory / disk / port before creating anything
 #   up         preflight runtime cluster metrics objectstore secrets kubecost expose workloads
@@ -62,8 +63,10 @@ STOP_COLIMA_ON_DESTROY="${STOP_COLIMA_ON_DESTROY:-0}"
 HOG_REPLICAS="${HOG_REPLICAS:-2}"
 HOG_CPU_LIMIT="${HOG_CPU_LIMIT:-1}"   # cores each resource-hog pod may burn
 WITH_QUOTA="${WITH_QUOTA:-1}"
-UI_PORT="${UI_PORT:-9091}"      # host port for the always-on UI (9090 is usually an existing lab)
 UI_NODEPORT=30090
+# shellcheck disable=SC1091
+source "$LAB_DIR/ui-port.sh"
+kc_resolve_ui_port || exit 1     # 9090, or the next free port if another instance holds it
 SHARE_HOSTNAME="${SHARE_HOSTNAME:-}"   # e.g. kubecost.example.com (zone on Cloudflare)
 TUNNEL_NAME="${TUNNEL_NAME:-$CLUSTER}"
 CF_DIR="$HOME/.cloudflared"
@@ -133,7 +136,7 @@ step_cluster() {
     echo "Cluster exists, reusing."
   else
     if port_busy "$UI_PORT"; then
-      die "Port $UI_PORT is already in use (another lab?). Set UI_PORT in lab/lab.env."
+      die "Port $UI_PORT is already in use (another lab?). Set UI_PORT=auto or another port in lab/lab.env."
     fi
     cat > "$WORKDIR/kind-config.yaml" <<EOF
 kind: Cluster
@@ -511,17 +514,17 @@ step_destroy() {
   fi
 }
 
-port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+port_busy() { kc_port_busy "$1"; }
 
 step_preflight() {
-  log "Preflight for cluster $CLUSTER (UI port $UI_PORT)"
+  log "Preflight for cluster $CLUSTER (UI port $UI_PORT: $KC_UI_PORT_SOURCE)"
   local others ok=1 vm_cpu="" vm_mem="" vm_disk_free=""
   others="$(kind get clusters 2>/dev/null | grep -vx "$CLUSTER" | tr '\n' ' ' || true)"
   echo "Other kind clusters (left untouched): ${others:-none}"
   if kind get clusters 2>/dev/null | grep -qx "$CLUSTER"; then
     echo "Cluster $CLUSTER already exists: 'up' will reuse it."
   elif port_busy "$UI_PORT"; then
-    warn "Port $UI_PORT is in use. Pick another UI_PORT in lab/lab.env."; ok=0
+    warn "Port $UI_PORT is in use. Set UI_PORT=auto (or another port) in lab/lab.env."; ok=0
   else
     echo "Port $UI_PORT is free."
   fi

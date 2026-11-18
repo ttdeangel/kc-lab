@@ -1,0 +1,41 @@
+# Lab budgets: budgets/lab.json -> Kubecost lab, through the reusable workflow.
+#   pull request  -> plan (job summary shows creates / updates / deletes)
+#   merge to main -> apply with prune, then a Budget API smoke test
+#   manual        -> any command
+name: kcbudget - lab
+
+on:
+  pull_request:
+    paths: ["budgets/lab.json", "kcbudget/**", ".github/workflows/kcbudget-*.yml"]
+  push:
+    branches: [main]
+    paths: ["budgets/lab.json", "kcbudget/**", ".github/workflows/kcbudget-*.yml"]
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "What to run"
+        type: choice
+        options: [plan, apply, smoke, doctor, check]
+        default: plan
+      prune:
+        description: "apply: delete kcb-* budgets that are not in the file"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  lab:
+    uses: ./.github/workflows/kcbudget-deploy.yml
+    with:
+      environment: kcbudget-lab
+      budgets-file: budgets/lab.json
+      command: ${{ github.event_name == 'pull_request' && 'plan' || (github.event_name == 'push' && 'apply') || inputs.command }}
+      prune: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.prune) }}
+      smoke: ${{ github.event_name == 'push' }}
+      strict: false                       # lab: a missing webhook is a warning, the rest still deploys
+      max-deletes: 50
+      runs-on: ${{ vars.KCRESIZE_RUNS_ON || '"ubuntu-latest"' }}
+      setup-python: ${{ vars.KCRESIZE_SETUP_PYTHON != 'false' }}
+      tool-repository: ${{ github.repository }}

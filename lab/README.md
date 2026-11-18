@@ -23,7 +23,7 @@ All names come from `lab/lab.env`, which `kcctl init` writes. The defaults keep 
 | Setting | Default | Why |
 |---|---|---|
 | `CLUSTER` | `kcresize-lab` | A different kind cluster and Kubecost clusterId; an existing cluster is never reused |
-| `UI_PORT` / `KUBECOST_URL` | `9091` / `http://localhost:9091` | An existing lab usually holds 9090 |
+| `UI_PORT` / `KUBECOST_URL` | `auto` → `9090` / `http://localhost:9090` | If another instance holds 9090, the next free port up to 9099 is used and remembered in `$WORKDIR/ui-port`. Set a number to pin it. |
 | `WORKDIR` | `./.lab/<cluster>` | Its own signing keys, values, credentials and local state |
 | `COLIMA_PROFILE` | `default` | Shares the running Colima VM |
 | `LEGACY_WORKLOADS` | `0` | Skips resource-hog, which burns about 2 cores |
@@ -108,3 +108,7 @@ gh issue list -l kcresize -s all       # old issues (close or delete as you like
 | `preflight`: port in use | Another lab or app holds `UI_PORT`; change it in `lab/lab.env` |
 | Scheduled for more than 2h | `curl -s "$KUBECOST_URL/model/actions/runs?window=2d"`. Status `failed` after 6h (`KCRESIZE_ACTION_TIMEOUT_H`). |
 | `/actions/savings` error | Expected for workloads with no cost history before the resize |
+
+## Budget alerts end to end
+`./lab/budget-e2e.sh` (or `kcctl budget-test`) tests kcbudget on this lab with email alerts. It runs 13 checked steps, by default with a local Mailpit inbox at http://localhost:8025. Inputs are asked once and saved, so repeat runs only need `-y`. See [docs/budgets.md](../docs/budgets.md#local-end-to-end-test-one-command).
+
