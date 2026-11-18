@@ -113,6 +113,16 @@ class TestSpec(Base):
         with self.assertRaises(spec.SpecError):
             spec.to_kubecost(doc, raw, {"slack": {}, "teams": {}}, strict=True)
 
+    def test_type_defaults_to_allocations_and_is_validated(self):
+        doc = self.lab()
+        body = spec.to_kubecost(doc, doc["budgets"][0], WEBHOOKS)
+        self.assertEqual(body["type"], "allocations")
+        doc["budgets"][0]["type"] = "bogus"
+        self.assertTrue(any("type must be one of" in e for e in spec.validate(doc)[0]))
+        with self.assertRaises(Exception) as e:           # the mock rejects a missing type like Kubecost 3.3.1
+            self.api.create({k: v for k, v in body.items() if k != "type"})
+        self.assertIn("budget type must be", str(e.exception))
+
     def test_mask(self):
         self.assertEqual(spec.mask("https://hooks.slack.com/services/T/B/secret"), "https://hooks.slack.com/***")
 
@@ -121,7 +131,7 @@ class TestSync(Base):
     def test_apply_idempotent_update_prune(self):
         doc, wh = self.lab(), spec.webhooks_from_env()
         # a budget someone made in the Kubecost UI: never touched
-        self.api.create({"name": "team-made-in-ui", "values": {"namespace": ["x"]}, "kind": "soft", "interval": "monthly",
+        self.api.create({"name": "team-made-in-ui", "type": "allocations", "values": {"namespace": ["x"]}, "kind": "soft", "interval": "monthly",
                          "intervalDay": 1, "spendLimit": 5, "actions": []})
         r = sync.plan(doc, self.api, wh)
         self.assertEqual(sum(c["op"] == "create" for c in r["changes"]), 50)

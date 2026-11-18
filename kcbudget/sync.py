@@ -7,7 +7,7 @@ import time
 
 from . import spec
 
-FIELDS = ("values", "kind", "interval", "intervalDay", "spendLimit", "actions")
+FIELDS = ("type", "values", "kind", "interval", "intervalDay", "spendLimit", "actions")
 
 
 def _diff(cur, want):
@@ -134,7 +134,7 @@ def export(api, prefix=None, reveal=False):
             if a.get("msTeamsWebhooks"):
                 al["teamsWebhooksFound"] = a["msTeamsWebhooks"] if reveal else spec.mask(a["msTeamsWebhooks"])
             alerts.append(al)
-        out.append({"name": r.get("name"), "values": n["values"], "kind": n["kind"], "interval": n["interval"],
+        out.append({"name": r.get("name"), "type": n["type"], "values": n["values"], "kind": n["kind"], "interval": n["interval"],
                     "intervalDay": n["intervalDay"], "spendLimit": n["spendLimit"], "alerts": alerts, "_kubecostId": r.get("id")})
     return {"managedPrefix": prefix or "kcb-", "budgets": out}
 
@@ -142,7 +142,7 @@ def export(api, prefix=None, reveal=False):
 def smoke(api, prefix="kcb-", namespace="kubecost", run_id=None):
     """Create -> read -> update -> delete a throwaway budget. Returns list of (step, ok, detail)."""
     name = f"{prefix}smoke-{run_id or int(time.time())}"[:63].rstrip("-")
-    body = {"name": name, "values": {"namespace": [namespace]}, "kind": "soft", "interval": "weekly",
+    body = {"name": name, "type": "allocations", "values": {"namespace": [namespace]}, "kind": "soft", "interval": "weekly",
             "intervalDay": 1, "spendLimit": 1, "actions": []}
     steps, bid = [], None
 

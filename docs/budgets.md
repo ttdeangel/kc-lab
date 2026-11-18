@@ -56,6 +56,7 @@ flowchart LR
 | Field | Rule |
 |---|---|
 | `name` | Must start with `managedPrefix`. Only prefixed budgets are managed; budgets made in the Kubecost UI are never changed or deleted. |
+| `type` | Kubecost budget type: `allocations` (default; namespace and cluster scopes), `asset`, `cloud` or `collections`. **Required by Kubecost 3.3.1**: a create without it fails with HTTP 500 `budget type must be ...`. |
 | `values` | Kubecost scope: `namespace` and/or `cluster` lists. Other keys pass through with a warning. |
 | `interval` / `intervalDay` | `monthly` (day 1-28) or `weekly` (0-6, 0 = Sunday). |
 | `alerts[].percentage` | Percent of `spendLimit` that triggers the alert (Kubecost `actions[].percentage`). |
@@ -63,7 +64,7 @@ flowchart LR
 | `pool` | Allocation check: the monthly equivalent of all budgets in a pool must fit its `monthlyLimit` (weekly × 52/12). |
 | `owner`, `costCenter`, `request` | Metadata for review and reporting; not sent to Kubecost. |
 
-How it maps to the API: each budget becomes `POST /model/budget` with `name, values, kind, interval, intervalDay, spendLimit, actions[{percentage, emails, slackWebhooks, msTeamsWebhooks}]`. Updates send the same body with `id`. Deletes use `/model/deleteBudget?id=`. The client falls back to REST paths (`/model/budget/{id}`) if a build exposes those instead.
+How it maps to the API: each budget becomes `POST /model/budget` with `name, type, values, kind, interval, intervalDay, spendLimit, actions[{percentage, emails, slackWebhooks, msTeamsWebhooks}]`. Updates send the same body with `id`. Deletes use `/model/deleteBudget?id=`. The client falls back to REST paths (`/model/budget/{id}`) if a build exposes those instead.
 
 ## Notifications
 | Channel | Native (Kubecost budget actions) | Repo-side (`kcbudget check`) |
@@ -197,6 +198,6 @@ No GitHub token or key is created or stored. The customer owns the Power Automat
 - **Paused lab:** when `KUBECOST_URL` is empty (`kcctl pause`), every job skips with a notice.
 
 ## Caveats
-- The Budget API paths come from Kubecost's published Budget API docs. They have **not yet been verified on Kubecost 3.3.1**, unlike the Actions endpoints in [kubecost-api-notes.md](kubecost-api-notes.md). Run `doctor` and `smoke` first. If your build differs, set `KCBUDGET_API_STYLE=rest` and record what you find in the notes.
+- Verified on the lab's Kubecost 3.3.1: `GET /model/budgets` and `POST /model/budget` (documented paths), and `type` is required. Run `doctor` and `smoke` on any other version first; if paths differ, set `KCBUDGET_API_STYLE=rest`.
 - `check` estimates the period from `interval` and `intervalDay` in UTC. It supports `namespace` and `cluster` scopes. Kubecost's own budget view is authoritative for exact totals.
 - Kubecost budgets are alerts only. `kind: hard` is stored, but nothing blocks deployments.

@@ -135,6 +135,9 @@ class H(BaseHTTPRequestHandler):
                     S.complete_action(body)
             return self.send(200, {"code": 200, "data": body})
         if self.path == "/model/budget":
+            if body.get("type") not in ("asset", "allocations", "cloud", "collections"):
+                return self.send(500, {"code": 500, "data": None, "message": "error parsing budget action: budget type must be "
+                                       f"asset, allocations, cloud or collections; got {body.get('type') or ''}"})
             with S.lock:
                 if body.get("id"):
                     if S.budget_style == "rest":
@@ -152,6 +155,8 @@ class H(BaseHTTPRequestHandler):
         S.log.append(("PUT", self.path, body))
         m = re.match(r"^/model/budget/([^/?]+)$", self.path)
         if m and S.budget_style == "rest":
+            if body.get("type") not in ("asset", "allocations", "cloud", "collections"):
+                return self.send(500, {"code": 500, "data": None, "message": "budget type must be asset, allocations, cloud or collections"})
             body["id"] = m.group(1)
             S.budgets = [body if b["id"] == m.group(1) else b for b in S.budgets]
             return self.send(200, {"code": 200, "data": body})

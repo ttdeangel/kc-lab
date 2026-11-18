@@ -33,3 +33,10 @@ So expect **about 1 to 1.5 hours** from apply to resize.
 - `latestKnownRequest` lags after a resize (still the old value an hour later). It comes from metrics, so don't use it to verify. kcresize verifies with `/actions/completed`.
 - Use `window=2d` or more for runs and completed: `1d` resets at 00:00 UTC.
 - Free tier: Actions are limited to 250 cores. Resource-quota right-sizing was Enterprise-only in 3.1.
+
+## Budget API (Kubecost 3.3.1, lab)
+- `GET /model/budgets` and `POST /model/budget` respond on the documented paths (kcbudget `doctor`).
+- `type` is **required** on create: `allocations | asset | cloud | collections`. Without it:
+  `HTTP 500 {"code":500,"message":"error parsing budget action: budget type must be asset, allocations, cloud or collections; got "}`.
+  kcbudget sends `"type": "allocations"` unless a budget sets another type.
+

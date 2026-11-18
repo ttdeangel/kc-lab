@@ -12,6 +12,7 @@ import re
 KNOWN_SCOPE_KEYS = ("namespace", "cluster")       # verified in the Budget API docs; others pass through with a warning
 INTERVALS = ("weekly", "monthly")
 KINDS = ("soft", "hard")
+TYPES = ("allocations", "asset", "cloud", "collections")   # required by Kubecost 3.x; namespace/cluster scopes are "allocations"
 NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 CHANNEL_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
@@ -44,6 +45,7 @@ def effective(doc, b):
     """A budget with file defaults applied (alerts are replaced, not merged)."""
     out = {k: v for k, v in doc.get("defaults", {}).items()}
     out.update(b)
+    out.setdefault("type", "allocations")
     out.setdefault("kind", "soft")
     out.setdefault("interval", "monthly")
     out.setdefault("intervalDay", 1)
@@ -102,6 +104,10 @@ def validate(doc):
             errors.append(f"{where}: weekly intervalDay is 0-6 (0 = Sunday)")
         if b["interval"] == "monthly" and not (isinstance(day, int) and 1 <= day <= 28):
             errors.append(f"{where}: monthly intervalDay is 1-28")
+        if b["type"] not in TYPES:
+            errors.append(f"{where}: type must be one of {', '.join(TYPES)}")
+        elif b["type"] != "allocations" and any(k in vals for k in KNOWN_SCOPE_KEYS if isinstance(vals, dict)):
+            warnings.append(f"{where}: namespace/cluster scopes are normally type 'allocations'")
         if b["kind"] not in KINDS:
             errors.append(f"{where}: kind must be soft or hard")
         lim = b.get("spendLimit")
@@ -175,11 +181,9 @@ def to_kubecost(doc, raw, webhooks, strict=False, problems=None):
             actions.append(act)
     if strict and problems:
         raise SpecError(problems)
-    body = {"name": b["name"], "values": {k: sorted(v) for k, v in b["values"].items()},
+    body = {"name": b["name"], "type": b["type"], "values": {k: sorted(v) for k, v in b["values"].items()},
             "kind": b["kind"], "interval": b["interval"], "intervalDay": b["intervalDay"],
             "spendLimit": b["spendLimit"], "actions": actions}
-    if b.get("type"):
-        body["type"] = b["type"]
     return body
 
 
@@ -194,6 +198,7 @@ def normalize(budget):
         acts.append(n)
     vals = budget.get("values") or {}
     return {
+        "type": budget.get("type") or "allocations",     # older builds omit it; same default as the file
         "values": {k: sorted(v) if isinstance(v, list) else v for k, v in vals.items() if v},
         "kind": budget.get("kind") or "soft",
         "interval": budget.get("interval"),

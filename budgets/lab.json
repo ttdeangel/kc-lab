@@ -6,6 +6,7 @@
     "example.com"
   ],
   "defaults": {
+    "type": "allocations",
     "kind": "soft",
     "interval": "monthly",
     "intervalDay": 1

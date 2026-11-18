@@ -77,7 +77,9 @@ def evaluate(api, now=None, prefix=""):
         filt, unknown = kubecost_filter(n["values"])
         row = {"name": name, "id": b.get("id"), "values": n["values"], "interval": n["interval"], "limit": n["spendLimit"],
                "period": iso(start), "actions": n["actions"], "kind": n["kind"]}
-        if unknown or not filt:
+        if n["type"] != "allocations":
+            row["error"] = f"type {n['type']} not supported by the checker (allocations only)"
+        elif unknown or not filt:
             row["error"] = f"scope {', '.join(unknown) or '(empty)'} not supported by the checker"
         else:
             try:
