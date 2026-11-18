@@ -279,7 +279,12 @@ EOF
 }
 
 s_apply() {
-  kb 6 apply --file "$FILE" --prune --max-deletes 60 || { MSG="apply reported failures"; return 1; }
+  if ! kb 6 apply --file "$FILE" --prune --max-deletes 60; then
+    local errs; errs="$(grep -E '^\[[0-9]+/[0-9]+\]' "$RUN/06-apply.log" 2>/dev/null | grep -o 'FAILED: .*' | sort | uniq -c | sort -rn)"
+    echo "--- distinct errors:"; echo "$errs"
+    MSG="apply failed: $(echo "$errs" | head -1 | sed 's/^ *//' | cut -c1-220)"
+    return 1
+  fi
   local c u d; c="$(outv 6 create)"; u="$(outv 6 update)"; d="$(outv 6 delete)"
   [ $(( c + u + $(outv 6 noop) )) -eq 50 ] || { MSG="expected 50 managed budgets, got create=$c update=$u noop=$(outv 6 noop)"; return 1; }
   MSG="created $c, updated $u, deleted $d, unchanged $(outv 6 noop)"
