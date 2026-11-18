@@ -42,7 +42,7 @@ class TestUiPort(unittest.TestCase):
         s = socket.socket()
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(("127.0.0.1", port))
-        s.listen(1)
+        s.listen(16)
         self.held.append(s)
 
     def resolve(self, **env):
@@ -88,6 +88,28 @@ class TestUiPort(unittest.TestCase):
         os.chmod(os.path.join(shim, "docker"), 0o755)
         rc, out, _ = self.resolve(PATH=f"{shim}:/usr/bin:/bin")
         self.assertEqual(out.split("|")[0], str(self.base))
+
+    def test_listener_that_never_accepts_counts_as_busy(self):
+        s = socket.socket()
+        s.bind(("127.0.0.1", self.base))
+        s.listen(0)                                    # tiny queue, never accept(): connects may hang
+        self.held.append(s)
+        fillers = []
+        for _ in range(8):                             # fill the queue so further connects block
+            c = socket.socket(); c.setblocking(False)
+            try:
+                c.connect(("127.0.0.1", self.base))
+            except (BlockingIOError, OSError):
+                pass
+            fillers.append(c)
+        try:
+            import time
+            t = time.time()
+            self.assertEqual(self.resolve()[1].split("|")[0], str(self.base + 1))
+            self.assertLess(time.time() - t, 10)
+        finally:
+            for c in fillers:
+                c.close()
 
     def test_all_taken_and_bad_value(self):
         for p in range(self.base, self.base + 10):

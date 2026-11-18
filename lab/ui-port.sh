@@ -11,7 +11,19 @@
 KC_DEFAULT_UI_PORT="${KC_DEFAULT_UI_PORT:-9090}"
 KC_MAX_UI_PORT="${KC_MAX_UI_PORT:-$((KC_DEFAULT_UI_PORT + 9))}"
 
-kc_port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+# In use = something accepts a TCP connection on 127.0.0.1:<port>. A refused connect returns at once (free).
+# A connect that hangs (macOS drops SYNs to a listener whose queue is full, then waits ~75s) also means a
+# listener: it is stopped after 1s and counted as in use.
+kc_port_busy() {
+  local pid killer rc
+  (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null &
+  pid=$!
+  ( sleep 1; kill "$pid" 2>/dev/null ) >/dev/null 2>&1 &
+  killer=$!
+  wait "$pid" 2>/dev/null; rc=$?
+  kill "$killer" 2>/dev/null; wait "$killer" 2>/dev/null
+  [ "$rc" -eq 0 ] || [ "$rc" -ge 128 ]
+}
 
 # Host port bound to the NodePort of an existing kind node (running or stopped), or nothing.
 kc_cluster_ui_port() {
