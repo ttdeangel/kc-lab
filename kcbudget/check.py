@@ -74,10 +74,23 @@ def evaluate(api, now=None, prefix=""):
             continue
         n = spec.normalize(b)
         start = period_start(n["interval"], n["intervalDay"], now)
+        live = False                       # Kubecost's own window + currentSpend, if they cover "now"
+        win = b.get("window") or {}
+        try:
+            ws = dt.datetime.fromisoformat(win["start"].replace("Z", "+00:00"))
+            we = dt.datetime.fromisoformat(win["end"].replace("Z", "+00:00"))
+            if ws <= now < we and isinstance(b.get("currentSpend"), (int, float)):
+                start, live = ws, True
+        except (KeyError, TypeError, ValueError, AttributeError):
+            pass
         filt, unknown = kubecost_filter(n["values"])
         row = {"name": name, "id": b.get("id"), "values": n["values"], "interval": n["interval"], "limit": n["spendLimit"],
                "period": iso(start), "actions": n["actions"], "kind": n["kind"]}
-        if n["type"] != "allocations":
+        if live:
+            row["spend"] = round(float(b["currentSpend"]), 4)       # Kubecost's own figure for this budget's window
+            row["pct"] = round(row["spend"] / n["spendLimit"] * 100, 1) if n["spendLimit"] else 0
+            row["source"] = "kubecost"
+        elif n["type"] != "allocations":
             row["error"] = f"type {n['type']} not supported by the checker (allocations only)"
         elif unknown or not filt:
             row["error"] = f"scope {', '.join(unknown) or '(empty)'} not supported by the checker"

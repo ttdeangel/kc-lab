@@ -119,9 +119,12 @@ class TestSpec(Base):
         self.assertEqual(body["type"], "allocations")
         doc["budgets"][0]["type"] = "bogus"
         self.assertTrue(any("type must be one of" in e for e in spec.validate(doc)[0]))
-        with self.assertRaises(Exception) as e:           # the mock rejects a missing type like Kubecost 3.3.1
-            self.api.create({k: v for k, v in body.items() if k != "type"})
+        self.assertEqual(body["budgetType"], "allocations")
+        with self.assertRaises(Exception) as e:           # like Kubecost 3.3.1: "type" alone is not read
+            self.api.create({k: v for k, v in body.items() if k != "budgetType"})
         self.assertIn("budget type must be", str(e.exception))
+        mock_kubecost.S.budget_type_field = "type"        # a build that follows the docs accepts the same body
+        self.assertTrue(self.api.create(dict(body, name="kcb-docs-build")))
 
     def test_mask(self):
         self.assertEqual(spec.mask("https://hooks.slack.com/services/T/B/secret"), "https://hooks.slack.com/***")
@@ -131,7 +134,7 @@ class TestSync(Base):
     def test_apply_idempotent_update_prune(self):
         doc, wh = self.lab(), spec.webhooks_from_env()
         # a budget someone made in the Kubecost UI: never touched
-        self.api.create({"name": "team-made-in-ui", "type": "allocations", "values": {"namespace": ["x"]}, "kind": "soft", "interval": "monthly",
+        self.api.create({"name": "team-made-in-ui", "budgetType": "allocations", "values": {"namespace": ["x"]}, "kind": "soft", "interval": "monthly",
                          "intervalDay": 1, "spendLimit": 5, "actions": []})
         r = sync.plan(doc, self.api, wh)
         self.assertEqual(sum(c["op"] == "create" for c in r["changes"]), 50)
@@ -154,6 +157,26 @@ class TestSync(Base):
         self.assertIn("team-made-in-ui", names)
         self.assertEqual(next(b for b in mock_kubecost.S.budgets if b["name"] == doc["budgets"][5]["name"])["spendLimit"], 31)
         self.assertEqual({c["op"] for c in sync.plan(doc, self.api, wh, prune=True)["changes"]}, {"noop"})
+
+    def test_docs_flavor_kubecost(self):
+        """The same apply / re-plan / prune cycle against a Kubecost that follows the 2.x docs."""
+        mock_kubecost.S.budget_flavor = "docs"
+        mock_kubecost.S.budget_type_field = "type"
+        doc = self.lab()
+        sync.apply(sync.plan(doc, self.api, WEBHOOKS), self.api)
+        self.assertEqual({c["op"] for c in sync.plan(doc, self.api, WEBHOOKS)["changes"]}, {"noop"})
+        doc["budgets"].pop(0)
+        log = sync.apply(sync.plan(doc, self.api, WEBHOOKS, prune=True), self.api)
+        self.assertFalse([x for x in log if "FAILED" in x[2]], log)
+        self.assertEqual(len(mock_kubecost.S.budgets), 49)
+
+    def test_331_duplicate_name_reply_is_success(self):
+        body = spec.to_kubecost(self.lab(), self.lab()["budgets"][0], WEBHOOKS)
+        bid = self.api.create(body)                       # stored, answered 400 "duplicate name"
+        self.assertTrue(bid)
+        self.assertEqual(len(mock_kubecost.S.budgets), 1)
+        self.assertEqual(self.api.create(body), bid)      # same name again: returns it, never a second copy
+        self.assertEqual(len(mock_kubecost.S.budgets), 1)
 
     def test_max_deletes_guard(self):
         doc, wh = self.lab(), spec.webhooks_from_env()
@@ -211,6 +234,7 @@ class TestSync(Base):
     def test_smoke(self):
         steps = sync.smoke(self.api, run_id="42")
         self.assertTrue(all(ok for _, ok, _ in steps), steps)
+        self.assertEqual(self.api._delete_path[1], "/model/budget")     # 3.3.1 delete path found
         self.assertEqual(mock_kubecost.S.budgets, [])
 
     def test_cli_plan_apply(self):
@@ -259,6 +283,15 @@ class TestCheck(Base):
         self.assertEqual(len(self.outbox_items()), n, "no duplicates in the same period")
         check.run(self.api, state, ["email", "slack", "teams"], env="kcbudget-lab", now=self.NOW + dt.timedelta(days=7))
         self.assertGreater(len(self.outbox_items()), n, "new period alerts again")
+
+    def test_uses_kubecost_current_spend_inside_its_window(self):
+        sync.apply(sync.plan(self.lab(), self.api, WEBHOOKS), self.api)
+        now = dt.datetime(2026, 11, 18, 12, 0, tzinfo=UTC)                 # inside the mock's window
+        rows = {r["name"]: r for r in check.evaluate(self.api, now)}
+        r = rows["kcb-tripwire-kubecost-weekly"]
+        self.assertEqual((r.get("source"), r["period"], r["spend"]), ("kubecost", "2026-11-16T00:00:00Z", 6.0))
+        rows = {r["name"]: r for r in check.evaluate(self.api, now + dt.timedelta(days=30))}
+        self.assertNotEqual(rows["kcb-tripwire-kubecost-weekly"].get("source"), "kubecost")   # window over: recompute
 
     def test_channel_filter_and_summary(self):
         sync.apply(sync.plan(self.lab(), self.api, WEBHOOKS), self.api)

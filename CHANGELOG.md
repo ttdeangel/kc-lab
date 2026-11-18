@@ -13,7 +13,12 @@
 - `lab/budget-e2e.sh` / `kcctl budget-test`: one-command kcbudget end to end with email (Mailpit, SMTP or dry-run). It runs 13 checked steps (PASS/FAIL/SKIP, a log per step) and asks for inputs at run time, saving them (never the password) for `-y` reruns. It works on a copy of the budget file and restores Kubecost afterwards.
 - kcbudget `apply` prints each change as it happens (`[i/N] create …`). Budget API calls time out after `KCBUDGET_TIMEOUT` seconds (default 20). A create is sent once; after a timeout or error, kcbudget checks Kubecost for the budget before trying again, so a slow Kubecost never gets duplicates.
 - `budget-e2e.sh` shows live progress on each step (elapsed time and latest line) and the log path up front.
-- Budgets are sent with `type` (default `allocations`), which Kubecost 3.3.1 requires on create. `type` is validated and compared in plans. The mock Kubecost now rejects a missing type the same way.
+- Kubecost 3.3.1 compatibility, verified against the lab with `lab/budget-probe.py`:
+  - The budget type is sent as both `budgetType` (what 3.3.1 reads) and `type` (the docs), default `allocations`.
+  - A create answered `400 duplicate name` counts as success once the budget is listed.
+  - Delete tries `DELETE /model/budget?id=`, then the documented paths, and confirms the result through the list.
+  - `check` uses Kubecost's own `window` and `currentSpend` while they're current.
+  - The mock Kubecost now behaves like 3.3.1 (a docs-style mode is kept), and these quirks are recorded in `docs/kubecost-api-notes.md`.
 - `budgets/lab.json`: 50 example lab budgets (cluster envelope, tripwires, real namespaces, 20-team example org, 3 pools).
 
 ## 1.2.0

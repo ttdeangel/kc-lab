@@ -65,8 +65,10 @@ class BudgetAPI(Kubecost):
                 bid = r.get("id") if isinstance(r, dict) else None
                 return bid or ((self._find(body["name"]) or [{}])[0].get("id"))
             except KubecostError as e:
-                if "HTTP 4" in str(e):
+                if "HTTP 4" in str(e) and "duplicate name" not in str(e):
                     raise
+                # timeout / 5xx, or Kubecost 3.3.1 answering "duplicate name" for the budget it just stored:
+                # the plan only creates names that were not in Kubecost, so a budget with this name is ours
                 found = self._find(body["name"])
                 if found:
                     return found[0].get("id")
@@ -77,17 +79,48 @@ class BudgetAPI(Kubecost):
         body = dict(body, id=bid)
         if self.detect() == "rest":
             return _data(self._call("PUT", f"/model/budget/{bid}", body=body))
-        return _data(self._call("POST", "/model/budget", body=body))
+        try:
+            return _data(self._call("POST", "/model/budget", body=body))
+        except KubecostError as e:
+            # same 3.3.1 quirk as create: the update may be stored and still answered "duplicate name"
+            if "duplicate name" in str(e) and self._matches(bid, body):
+                return None
+            raise
+
+    def _matches(self, bid, body):
+        from . import spec
+        cur = [b for b in self.list() if b.get("id") == bid]
+        return bool(cur) and spec.normalize(cur[0]) == spec.normalize(body)
+
+    # delete paths in the order tried; the first that works is remembered
+    DELETE_PATHS = (("DELETE", "/model/budget", "query"),          # Kubecost 3.3.1: /model/budget?id=
+                    ("DELETE", "/model/deleteBudget", "query"),    # Kubecost 2.x docs
+                    ("DELETE", "/model/budget/{id}", "path"))      # REST-style builds
 
     def delete(self, bid):
+        paths = self.DELETE_PATHS
         if self.detect() == "rest":
-            return self._call("DELETE", f"/model/budget/{bid}")
-        try:
-            return self._call("DELETE", "/model/deleteBudget", {"id": bid})
-        except KubecostError as e:
-            if "HTTP 404" in str(e) or "HTTP 405" in str(e):
-                return self._call("DELETE", f"/model/budget/{bid}")
-            raise
+            paths = (paths[2],) + paths[:2]
+        if getattr(self, "_delete_path", None):
+            paths = (self._delete_path,) + tuple(p for p in paths if p != self._delete_path)
+        errors = []
+        for method, path, style in paths:
+            try:
+                if style == "path":
+                    r = self._call(method, path.replace("{id}", bid), attempts=1)
+                else:
+                    r = self._call(method, path, {"id": bid}, attempts=1)
+            except KubecostError as e:
+                errors.append(str(e))
+                if any(f"HTTP {c}" in str(e) for c in (400, 404, 405)):
+                    continue
+                raise
+            if any(b.get("id") == bid for b in self.list()):       # answered OK but still there: try the next path
+                errors.append(f"{method} {path}: answered OK but the budget is still listed")
+                continue
+            self._delete_path = (method, path, style)
+            return r
+        raise KubecostError("delete failed on every known path: " + " | ".join(errors))
 
     # ---------- spend (Allocation API)
     def spend(self, filt, start, end):

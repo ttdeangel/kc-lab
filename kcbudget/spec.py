@@ -181,7 +181,8 @@ def to_kubecost(doc, raw, webhooks, strict=False, problems=None):
             actions.append(act)
     if strict and problems:
         raise SpecError(problems)
-    body = {"name": b["name"], "type": b["type"], "values": {k: sorted(v) for k, v in b["values"].items()},
+    # "type" is the documented field; Kubecost 3.3.1 reads "budgetType". Send both: each build ignores the other.
+    body = {"name": b["name"], "type": b["type"], "budgetType": b["type"], "values": {k: sorted(v) for k, v in b["values"].items()},
             "kind": b["kind"], "interval": b["interval"], "intervalDay": b["intervalDay"],
             "spendLimit": b["spendLimit"], "actions": actions}
     return body
@@ -198,7 +199,7 @@ def normalize(budget):
         acts.append(n)
     vals = budget.get("values") or {}
     return {
-        "type": budget.get("type") or "allocations",     # older builds omit it; same default as the file
+        "type": budget.get("budgetType") or budget.get("type") or "allocations",   # 3.3.1: budgetType; docs: type
         "values": {k: sorted(v) if isinstance(v, list) else v for k, v in vals.items() if v},
         "kind": budget.get("kind") or "soft",
         "interval": budget.get("interval"),

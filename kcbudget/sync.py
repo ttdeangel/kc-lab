@@ -142,7 +142,7 @@ def export(api, prefix=None, reveal=False):
 def smoke(api, prefix="kcb-", namespace="kubecost", run_id=None):
     """Create -> read -> update -> delete a throwaway budget. Returns list of (step, ok, detail)."""
     name = f"{prefix}smoke-{run_id or int(time.time())}"[:63].rstrip("-")
-    body = {"name": name, "type": "allocations", "values": {"namespace": [namespace]}, "kind": "soft", "interval": "weekly",
+    body = {"name": name, "type": "allocations", "budgetType": "allocations", "values": {"namespace": [namespace]}, "kind": "soft", "interval": "weekly",
             "intervalDay": 1, "spendLimit": 1, "actions": []}
     steps, bid = [], None
 

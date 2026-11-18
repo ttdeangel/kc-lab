@@ -42,7 +42,8 @@ def budgets():
 def cleanup():
     for b in budgets():
         if str(b.get("name", "")).startswith("kcb-probe"):
-            for path, params in (("/model/deleteBudget", {"id": b.get("id")}), (f"/model/budget/{b.get('id')}", None)):
+            for path, params in (("/model/budget", {"id": b.get("id")}), ("/model/deleteBudget", {"id": b.get("id")}),
+                                 (f"/model/budget/{b.get('id')}", None)):
                 st, _ = call("DELETE", path, params=params)
                 if 200 <= st < 300:
                     break
@@ -72,12 +73,13 @@ ok = []
 for label, body in variants:
     params = {"type": "allocations"} if label.startswith("G") else None
     st, raw = call("POST", "/model/budget", body, params)
-    good = 200 <= st < 300
+    name = body.get("name") or body.get("budget", {}).get("name")
+    stored = [b for b in budgets() if b.get("name") == name]
+    good = bool(stored)                      # judged by what Kubecost stored, not by the status code
     ok += [label] if good else []
-    print(f"{'ACCEPTED' if good else 'rejected'}  {label:38} HTTP {st}  {raw[:160]}")
+    note = " (stored, though the reply was an error: Kubecost 3.3.1 quirk)" if good and not 200 <= st < 300 else ""
+    print(f"{'ACCEPTED' if good else 'rejected'}  {label:38} HTTP {st}{note}  {raw[:160]}")
     if good:
-        name = body.get("name") or body.get("budget", {}).get("name")
-        stored = [b for b in budgets() if b.get("name") == name]
         if stored:
             print("          stored as: " + json.dumps(stored[0])[:600])
     cleanup()
